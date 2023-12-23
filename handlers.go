@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	chatgpt_request_converter "freechatgpt/conversion/requests/chatgpt"
 	chatgpt "freechatgpt/internal/chatgpt"
+	"freechatgpt/internal/gemini/api"
 	"freechatgpt/internal/tokens"
 	official_types "freechatgpt/typings/official"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -67,19 +72,61 @@ func simulateModel(c *gin.Context) {
 				"created":  1688888888,
 				"owned_by": "chatgpt-to-api",
 			},
+			{
+				"id":       "gemini-pro",
+				"object":   "model",
+				"created":  1688888888,
+				"owned_by": "chatgpt-to-api",
+			},
+			{
+				"id":       "gemini-pro-vision",
+				"object":   "model",
+				"created":  1688888888,
+				"owned_by": "chatgpt-to-api",
+			},
 		},
 	})
 }
 func nightmare(c *gin.Context) {
 	var original_request official_types.APIRequest
-	err := c.BindJSON(&original_request)
-	if err != nil {
-		c.JSON(400, gin.H{"error": gin.H{
-			"message": "Request must be proper JSON",
-			"type":    "invalid_request_error",
-			"param":   nil,
-			"code":    err.Error(),
-		}})
+	if c.Request.ContentLength == 0 {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	buff := &bytes.Buffer{}
+	defer c.Request.Body.Close()
+	if _, err := io.Copy(buff, c.Request.Body); err != nil {
+		c.JSON(500, gin.H{
+			"error": err,
+		})
+		return
+	}
+	if err := json.Unmarshal(buff.Bytes(), &original_request); err != nil {
+		c.JSON(500, gin.H{
+			"error": err,
+		})
+		return
+	}
+
+	// err := c.BindJSON(&original_request)
+	// if err != nil {
+	// 	c.JSON(400, gin.H{"error": gin.H{
+	// 		"message": "Request must be proper JSON",
+	// 		"type":    "invalid_request_error",
+	// 		"param":   nil,
+	// 		"code":    err.Error(),
+	// 	}})
+	// 	return
+	// }
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(buff.Bytes()))
+	if original_request.Model == "gemini-pro" {
+		api.ChatProxyHandler(c)
+		return
+	}
+
+	if original_request.Model == "gemini-pro-vision" {
+		api.VisionProxyHandler(c)
 		return
 	}
 
@@ -92,6 +139,7 @@ func nightmare(c *gin.Context) {
 			token = customAccessToken
 		}
 	}
+
 	var proxy_url string
 	if len(proxies) == 0 {
 		proxy_url = ""

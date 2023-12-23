@@ -37,7 +37,7 @@ func ConvertAPIRequest(api_request official_types.APIRequest, puid string, proxy
 		if api_message.Role == "system" {
 			api_message.Role = "critic"
 		}
-		chatgpt_request.AddMessage(api_message.Role, api_message.Content)
+		chatgpt_request.AddMessage(api_message.Role, api_message.Content.(string))
 	}
 	return chatgpt_request
 }
