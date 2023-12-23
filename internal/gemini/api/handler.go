@@ -3,10 +3,13 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -51,15 +54,49 @@ func ModelRetrieveHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, model)
 }
 
-func VisionProxyHandler(c *gin.Context) {
-	// Retrieve the Authorization header value
-	authorizationHeader := c.GetHeader("Authorization")
-	// Declare a variable to store the OPENAI_API_KEY
-	var openaiAPIKey string
-	// Use fmt.Sscanf to extract the Bearer token
-	_, err := fmt.Sscanf(authorizationHeader, "Bearer %s", &openaiAPIKey)
+func getRandomAPIKey() (string, error) {
+	// Read the content of the JSON file
+	file, err := os.ReadFile("gemini-api-key.json")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return "", err
+	}
+
+	// Create a map to hold the data from the JSON file
+	var data map[string][]string
+
+	// Unmarshal the JSON data into the map
+	if err := json.Unmarshal(file, &data); err != nil {
+		return "", err
+	}
+
+	// Retrieve the API keys array from the map
+	keys, exists := data["api_keys"]
+	if !exists || len(keys) == 0 {
+		return "", errors.New("no API keys found in the file")
+	}
+
+	// Create a new random source and generator
+	src := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(src)
+
+	// Select a random key from the array
+	randomIndex := rng.Intn(len(keys))
+	return keys[randomIndex], nil
+}
+
+func VisionProxyHandler(c *gin.Context) {
+	openaiAPIKey, err := getRandomAPIKey()
+	if err != nil {
+		// Handle the error, for example, log it and return from the function
+		log.Printf("Error getting API key: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API key from gemini-api-key.json file"})
+		return
+	}
+
+	println("use api key:" + openaiAPIKey)
+
+	if openaiAPIKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Api key not found!"})
 		return
 	}
 	var req openai.ChatCompletionRequest
@@ -179,14 +216,18 @@ func VisionProxyHandler(c *gin.Context) {
 }
 
 func ChatProxyHandler(c *gin.Context) {
-	// Retrieve the Authorization header value
-	authorizationHeader := c.GetHeader("Authorization")
-	// Declare a variable to store the OPENAI_API_KEY
-	var openaiAPIKey string
-	// Use fmt.Sscanf to extract the Bearer token
-	_, err := fmt.Sscanf(authorizationHeader, "Bearer %s", &openaiAPIKey)
+	openaiAPIKey, err := getRandomAPIKey()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		// Handle the error, for example, log it and return from the function
+		log.Printf("Error getting API key: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve API key from gemini-api-key.json file"})
+		return
+	}
+
+	println("use api key:" + openaiAPIKey)
+
+	if openaiAPIKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Api key not found!"})
 		return
 	}
 
