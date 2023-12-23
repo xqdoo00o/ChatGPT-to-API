@@ -4,7 +4,7 @@ tools/authenticator/proxies.txt
 tools/authenticator/authenticated_accounts.txt
 tools/authenticator/access_tokens.txt
 *.txt
-access_tokens.json
+*.json
 freechatgpt
 chatgpttoapi
 tools/authenticator/.proxies.txt.swp

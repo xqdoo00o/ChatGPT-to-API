@@ -8,37 +8,29 @@ import (
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 
-	arkose "github.com/acheong08/funcaptcha"
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
+	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/gin-gonic/gin"
 
 	chatgpt_response_converter "freechatgpt/conversion/response/chatgpt"
-
-	// chatgpt "freechatgpt/internal/chatgpt"
 
 	official_types "freechatgpt/typings/official"
 )
 
 var (
-	jar     = tls_client.NewCookieJar()
-	options = []tls_client.HttpClientOption{
-		tls_client.WithTimeoutSeconds(360),
-		tls_client.WithClientProfile(tls_client.Okhttp4Android13),
-		tls_client.WithNotFollowRedirects(),
-		tls_client.WithCookieJar(jar), // create cookieJar instance and pass it as argument
-		// Disable SSL verification
-		tls_client.WithInsecureSkipVerify(),
-	}
-	client, _         = tls_client.NewHttpClient(tls_client.NewNoopLogger(), options...)
-	API_REVERSE_PROXY = os.Getenv("API_REVERSE_PROXY")
+	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
+		tls_client.WithCookieJar(tls_client.NewCookieJar()),
+		tls_client.WithTimeoutSeconds(600),
+		tls_client.WithClientProfile(profiles.Okhttp4Android13),
+	}...)
+	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
+	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 )
-
-func init() {
-	arkose.SetTLSClient(&client)
-}
 
 func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, proxy string) (*http.Response, error) {
 	if proxy != "" {
@@ -65,8 +57,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36")
-	request.Header.Set("Accept", "*/*")
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("Accept", "text/event-stream")
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
 	}
@@ -111,7 +103,39 @@ type ContinueInfo struct {
 	ParentID       string `json:"parent_id"`
 }
 
-func Handler(c *gin.Context, response *http.Response, token string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
+type fileInfo struct {
+	DownloadURL string `json:"download_url"`
+	Status      string `json:"status"`
+}
+
+func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string, puid string, idx int, imgSource []string) {
+	defer wg.Done()
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
+	// Clear cookies
+	if puid != "" {
+		request.Header.Set("Cookie", "_puid="+puid+";")
+	}
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("Accept", "*/*")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return
+	}
+	defer response.Body.Close()
+	var file_info fileInfo
+	err = json.NewDecoder(response.Body).Decode(&file_info)
+	if err != nil || file_info.Status != "success" {
+		return
+	}
+	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
+}
+func Handler(c *gin.Context, response *http.Response, token string, puid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
 	max_tokens := false
 
 	// Create a bufio.Reader from the response body
@@ -129,6 +153,8 @@ func Handler(c *gin.Context, response *http.Response, token string, translated_r
 	var previous_text typings.StringStruct
 	var original_response chatgpt_types.ChatGPTResponse
 	var isRole = true
+	var waitSource = false
+	var imgSource []string
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -145,7 +171,6 @@ func Handler(c *gin.Context, response *http.Response, token string, translated_r
 		// Check if line starts with [DONE]
 		if !strings.HasPrefix(line, "[DONE]") {
 			// Parse the line as JSON
-
 			err = json.Unmarshal([]byte(line), &original_response)
 			if err != nil {
 				continue
@@ -154,13 +179,77 @@ func Handler(c *gin.Context, response *http.Response, token string, translated_r
 				c.JSON(500, gin.H{"error": original_response.Error})
 				return "", nil
 			}
-			if original_response.Message.Author.Role != "assistant" || original_response.Message.Content.Parts == nil {
+			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
 			}
-			if original_response.Message.Metadata.MessageType != "next" && original_response.Message.Metadata.MessageType != "continue" || original_response.Message.EndTurn != nil {
+			if original_response.Message.Metadata.MessageType != "next" && original_response.Message.Metadata.MessageType != "continue" || !strings.HasSuffix(original_response.Message.Content.ContentType, "text") {
 				continue
 			}
-			response_string := chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
+			if original_response.Message.EndTurn != nil {
+				if waitSource {
+					waitSource = false
+				} else {
+					continue
+				}
+			}
+			if len(original_response.Message.Metadata.Citations) != 0 {
+				r := []rune(original_response.Message.Content.Parts[0].(string))
+				if waitSource {
+					if string(r[len(r)-1:]) == "】" {
+						waitSource = false
+					} else {
+						continue
+					}
+				}
+				offset := 0
+				for i, citation := range original_response.Message.Metadata.Citations {
+					rl := len(r)
+					original_response.Message.Content.Parts[0] = string(r[:citation.StartIx+offset]) + "[^" + strconv.Itoa(i+1) + "^](" + citation.Metadata.URL + " \"" + citation.Metadata.Title + "\")" + string(r[citation.EndIx+offset:])
+					r = []rune(original_response.Message.Content.Parts[0].(string))
+					offset += len(r) - rl
+				}
+			} else if waitSource {
+				continue
+			}
+			response_string := ""
+			if original_response.Message.Recipient != "all" {
+				continue
+			}
+			if original_response.Message.Content.ContentType == "multimodal_text" {
+				apiUrl := "https://chat.openai.com/backend-api/files/"
+				if FILES_REVERSE_PROXY != "" {
+					apiUrl = FILES_REVERSE_PROXY
+				}
+				imgSource = make([]string, len(original_response.Message.Content.Parts))
+				var wg sync.WaitGroup
+				for index, part := range original_response.Message.Content.Parts {
+					jsonItem, _ := json.Marshal(part)
+					var dalle_content chatgpt_types.DalleContent
+					err = json.Unmarshal(jsonItem, &dalle_content)
+					if err != nil {
+						continue
+					}
+					url := apiUrl + strings.Split(dalle_content.AssetPointer, "//")[1] + "/download"
+					wg.Add(1)
+					go GetImageSource(&wg, url, dalle_content.Metadata.Dalle.Prompt, token, puid, index, imgSource)
+				}
+				wg.Wait()
+				translated_response := official_types.NewChatCompletionChunk(strings.Join(imgSource, ""))
+				if isRole {
+					translated_response.Choices[0].Delta.Role = original_response.Message.Author.Role
+				}
+				response_string = "data: " + translated_response.String() + "\n\n"
+			}
+			if response_string == "" {
+				response_string = chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
+			}
+			if response_string == "" {
+				continue
+			}
+			if response_string == "【" {
+				waitSource = true
+				continue
+			}
 			isRole = false
 			if stream {
 				_, err = c.Writer.WriteString(response_string)
@@ -186,24 +275,10 @@ func Handler(c *gin.Context, response *http.Response, token string, translated_r
 		}
 	}
 	if !max_tokens {
-		return previous_text.Text, nil
+		return strings.Join(imgSource, "") + previous_text.Text, nil
 	}
-	return previous_text.Text, &ContinueInfo{
+	return strings.Join(imgSource, "") + previous_text.Text, &ContinueInfo{
 		ConversationID: original_response.ConversationID,
 		ParentID:       original_response.Message.ID,
 	}
-}
-
-func GETengines() (interface{}, int, error) {
-	url := "https://api.openai.com/v1/models"
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("Authorization", "Bearer "+os.Getenv("OFFICIAL_API_KEY"))
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-	var result interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result, resp.StatusCode, nil
 }

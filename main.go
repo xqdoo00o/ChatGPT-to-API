@@ -49,9 +49,6 @@ func init() {
 
 	HOST = os.Getenv("SERVER_HOST")
 	PORT = os.Getenv("SERVER_PORT")
-	if PORT == "" {
-		PORT = os.Getenv("PORT")
-	}
 	if HOST == "" {
 		HOST = "127.0.0.1"
 	}
@@ -79,12 +76,9 @@ func main() {
 	/// Admin routes
 	admin_routes.PATCH("/password", passwordHandler)
 	admin_routes.PATCH("/tokens", tokensHandler)
-	admin_routes.PATCH("/puid", puidHandler)
-	admin_routes.PATCH("/openai", openaiHandler)
 	/// Public routes
 	router.OPTIONS("/v1/chat/completions", optionsHandler)
 	router.POST("/v1/chat/completions", Authorization, nightmare)
-	router.GET("/v1/engines", Authorization, engines_handler)
-	router.GET("/v1/models", Authorization, engines_handler)
+	router.GET("/v1/models", Authorization, simulateModel)
 	endless.ListenAndServe(HOST+":"+PORT, router)
 }

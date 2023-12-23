@@ -52,7 +52,7 @@ func Authorization(c *gin.Context) {
 	}
 	if len(API_KEYS) != 0 && !API_KEYS[c.Request.Header.Get("Authorization")] {
 		if c.Request.Header.Get("Authorization") == "" {
-			c.JSON(401, gin.H{"error": "No API key provided. Get one at https://discord.gg/9K2BvbXEHT"})
+			c.JSON(401, gin.H{"error": "No API key provided. Please provide an API key as part of the Authorization header."})
 		} else if strings.HasPrefix(c.Request.Header.Get("Authorization"), "Bearer sk-") {
 			c.JSON(401, gin.H{"error": "You tried to use the official API key which is not supported."})
 		} else if strings.HasPrefix(c.Request.Header.Get("Authorization"), "Bearer eyJhbGciOiJSUzI1NiI") {

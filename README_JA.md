@@ -12,7 +12,7 @@ ChatGPT のウェブサイトを使って偽 API を作る
 
 ### 認証
 
-アクセストークンの取得は [OpenAIAuth](https://github.com/acheong08/OpenAIAuth/) により、アカウントのメールアドレスとパスワードで自動化されています。
+アクセストークンの取得は [OpenAIAuth](https://github.com/xqdoo00o/OpenAIAuth/) により、アカウントのメールアドレスとパスワードで自動化されています。
 
 `accounts.txt` - 改行で区切られたアカウントのリスト
 
@@ -43,18 +43,17 @@ sk-123456
 
 ## 準備
 ```
-git clone https://github.com/acheong08/ChatGPT-to-API
+git clone https://github.com/xqdoo00o/ChatGPT-to-API
 cd ChatGPT-to-API
 go build
 ./freechatgpt
 ```
 
 ### 環境変数
-  - `PUID` - chat.openai.com の Plus ユーザー向けのクッキーです。これは Cloudflare のレート制限を回避します
   - `SERVER_HOST` - デフォルトで 127.0.0.1 に設定
   - `SERVER_PORT` - デフォルトで 8080 に設定
   - `OPENAI_EMAIL` と `OPENAI_PASSWORD` - PUID が設定されている場合、自動的に更新されます
-  - `ENABLE_HISTORY` - デフォルトで true に設定
+  - `ENABLE_HISTORY` - デフォルトで false に設定
 
 ### ファイル（オプション）
   - `proxies.txt` - 改行で区切られたプロキシのリスト
@@ -63,13 +62,13 @@ go build
     http://127.0.0.1:8888
     ...
     ```
-  - `access_tokens.json` - サイクリング用のアクセストークンの JSON 配列（あるいは、[正しいエンドポイント](https://github.com/acheong08/ChatGPT-to-API/blob/master/docs/admin.md)に PATCH リクエストを送る）
+  - `access_tokens.json` - サイクリング用のアクセストークンの JSON 配列（あるいは、[正しいエンドポイント](https://github.com/xqdoo00o/ChatGPT-to-API/blob/master/docs/admin.md)に PATCH リクエストを送る）
     ```
     ["access_token1", "access_token2"...]
     ```
 
 ## Admin API ドキュメント
-https://github.com/acheong08/ChatGPT-to-API/blob/master/docs/admin.md
+https://github.com/xqdoo00o/ChatGPT-to-API/blob/master/docs/admin.md
 
 ## API 使用方法ドキュメント
 https://platform.openai.com/docs/api-reference/chat
