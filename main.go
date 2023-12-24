@@ -15,6 +15,7 @@ var HOST string
 var PORT string
 var ACCESS_TOKENS tokens.AccessToken
 var proxies []string
+var tlsCert, tlsKey string
 
 func checkProxy() {
 	// first check for proxies.txt
@@ -46,6 +47,8 @@ func checkProxy() {
 
 func init() {
 	_ = godotenv.Load(".env")
+	tlsCert = os.Getenv("TLS_CERT")
+	tlsKey = os.Getenv("TLS_KEY")
 
 	HOST = os.Getenv("SERVER_HOST")
 	PORT = os.Getenv("SERVER_PORT")
@@ -80,5 +83,5 @@ func main() {
 	router.OPTIONS("/v1/chat/completions", optionsHandler)
 	router.POST("/v1/chat/completions", Authorization, nightmare)
 	router.GET("/v1/models", Authorization, simulateModel)
-	endless.ListenAndServe(HOST+":"+PORT, router)
+	endless.ListenAndServeTLS(HOST+":"+PORT, tlsCert, tlsKey, router)
 }

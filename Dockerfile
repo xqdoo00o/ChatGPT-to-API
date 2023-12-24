@@ -23,14 +23,18 @@ RUN go build -o /app/ChatGPT-To-API .
 # Use a scratch image as the final distroless image
 FROM scratch
 
+WORKDIR /tls
+
 # Set the working directory
 WORKDIR /app
+
+COPY ./ca-certificates.crt /etc/ssl/certs/
 
 # Copy the built Go binary from the builder stage
 COPY --from=builder /app/ChatGPT-To-API /app/ChatGPT-To-API
 
 # Expose the port where the application is running
-EXPOSE 8080
+EXPOSE 443
 
 # Start the application
 CMD [ "./ChatGPT-To-API" ]

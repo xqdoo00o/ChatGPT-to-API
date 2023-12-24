@@ -52,7 +52,10 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	if err != nil {
 		return &http.Response{}, err
 	}
-	// Clear cookies
+	// If PUID is not provided, check the environment
+	if puid == "" {
+		puid = os.Getenv("PUID")
+	}
 	if puid != "" {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}

@@ -2,14 +2,31 @@ version: '3'
 
 services:
   app:
-    image: acheong08/chatgpt-to-api # 总是使用latest,更新时重新pull该tag镜像即可
+    #image: acheong08/chatgpt-to-api # æ€»æ˜¯ä½¿ç”¨latest,æ›´æ–°æ—¶é‡æ–°pullè¯¥tagé•œåƒå³å¯
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: chatgpttoapi
     restart: unless-stopped
     ports:
-      - '8080:8080'
+      - '443:443'
     environment:
       SERVER_HOST: 0.0.0.0
-      SERVER_PORT: 8080
+      SERVER_PORT: 443
       ADMIN_PASSWORD: TotallySecurePassword
       # If the parameter API_REVERSE_PROXY is empty, the default request URL is https://chat.openai.com/backend-api/conversation, and the PUID is <NOT> equired.
-      PUID: xxx
+      #PUID: xxx
+      #API_REVERSE_PROXY: https://bypass.churchless.tech/conversation
+      ENABLE_HISTORY: "false"
+      TLS_CERT: /tls/fullchain.pem
+      TLS_KEY: /tls/privkey.pem
+    volumes:
+      - /path/to/fullchain.pem:/tls/fullchain.pem
+      - /path/to/privkey.pem:/tls/privkey.pem
+      - ./access_tokens.json:/app/access_tokens.json
+      - ./cookies.json:/app/cookies.json
+      - ./accounts.txt:/app/accounts.txt
+      - ./chat.openai.com.har:/app/chat.openai.com.har
+      - ./proxies.txt:/app/proxies.txt
+      - ./harPool:/app/harPool
+
