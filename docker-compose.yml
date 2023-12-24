@@ -29,4 +29,4 @@ services:
       - ./chat.openai.com.har:/app/chat.openai.com.har
       - ./proxies.txt:/app/proxies.txt
       - ./harPool:/app/harPool
-
+      - ./gemini-api-key.json:/app/gemini-api-key.json
