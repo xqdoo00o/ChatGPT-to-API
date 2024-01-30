@@ -170,10 +170,10 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
-github.com/xqdoo00o/OpenAIAuth v0.0.0-20231123154104-bd007b6ae95d h1:9Tp3V3tM3JC06ol9k7yRYlboWh8c4HQGettpZgqmehI=
-github.com/xqdoo00o/OpenAIAuth v0.0.0-20231123154104-bd007b6ae95d/go.mod h1:NnEUTZA4plRi7HASFQ14II4jS7CkNXVlHfHP3VrN96g=
-github.com/xqdoo00o/funcaptcha v0.0.0-20231116083157-e2a60817e1e4 h1:VzvfS+25zgh13foPhFQGlfJawsNSpDZgOcMg1r8dI/g=
-github.com/xqdoo00o/funcaptcha v0.0.0-20231116083157-e2a60817e1e4/go.mod h1:2frDREz1MeGS6sXyNSQGKJGd/0yCCydf5khEqyi4krI=
+github.com/xqdoo00o/OpenAIAuth v0.0.0-20240119133540-9d0c14e31678 h1:nZoYYOeUGeroU302rkYxxeehe5gnS8FPQzpbn/JMkvk=
+github.com/xqdoo00o/OpenAIAuth v0.0.0-20240119133540-9d0c14e31678/go.mod h1:VTcu1KCFag3OEhhbo6YPa2/dNluk1DmzIRXiDav799g=
+github.com/xqdoo00o/funcaptcha v0.0.0-20240119125440-13927300884f h1:r5RUduEYYU3grdJOUCCyY+PM5GG7sDayRvxbUkta3uQ=
+github.com/xqdoo00o/funcaptcha v0.0.0-20240119125440-13927300884f/go.mod h1:2frDREz1MeGS6sXyNSQGKJGd/0yCCydf5khEqyi4krI=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 github.com/zhu327/gemini-openai-proxy v0.0.0-20231218053636-9479922089bb h1:3Q4wKOW0waiWYulN1VBCo0eQA2GX8QZNr22uXEDdwEM=
 github.com/zhu327/gemini-openai-proxy v0.0.0-20231218053636-9479922089bb/go.mod h1:Dcy8/8lOjID/IAx+WSvjSr1WAif1l6xEwaSLivpS/+M=
