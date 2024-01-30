@@ -15,10 +15,10 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/sashabaranov/go-openai v1.17.9
 	github.com/tidwall/gjson v1.14.4
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20231123154104-bd007b6ae95d
-	github.com/xqdoo00o/funcaptcha v0.0.0-20231116083157-e2a60817e1e4
 	github.com/zhu327/gemini-openai-proxy v0.0.0-20231218053636-9479922089bb
 	google.golang.org/api v0.154.0
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240119133540-9d0c14e31678
+	github.com/xqdoo00o/funcaptcha v0.0.0-20240119125440-13927300884f
 	k8s.io/apimachinery v0.27.2
 )
 
