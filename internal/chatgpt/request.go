@@ -52,7 +52,11 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	if err != nil {
 		return &http.Response{}, err
 	}
-	// Clear cookies
+
+	if puid == "" {
+		puid = os.Getenv("PUID")
+	}
+
 	if puid != "" {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
@@ -135,6 +139,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 	}
 	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
 }
+
 func Handler(c *gin.Context, response *http.Response, token string, puid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
 	max_tokens := false
 
