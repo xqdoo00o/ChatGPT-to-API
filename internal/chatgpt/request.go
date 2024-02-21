@@ -32,56 +32,73 @@ var (
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 )
 
+// POSTconversation function sends a POST request to the OpenAI API to start a conversation
 func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, proxy string) (*http.Response, error) {
+	// If a proxy is provided, set it for the client
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
 
+	// Define the API URL
 	apiUrl := "https://chat.openai.com/backend-api/conversation"
+	// If a reverse proxy is set, use it as the API URL
 	if API_REVERSE_PROXY != "" {
 		apiUrl = API_REVERSE_PROXY
 	}
 
-	// JSONify the body and add it to the request
+	// Convert the message to JSON format
 	body_json, err := json.Marshal(message)
 	if err != nil {
+		// If an error occurs during conversion, return an empty response and the error
 		return &http.Response{}, err
 	}
 
+	// Create a new POST request with the API URL and the JSONified message
 	request, err := http.NewRequest(http.MethodPost, apiUrl, bytes.NewBuffer(body_json))
 	if err != nil {
+		// If an error occurs during request creation, return an empty response and the error
 		return &http.Response{}, err
 	}
 
+	// If no PUID is provided, get it from the environment variables
 	if puid == "" {
 		puid = os.Getenv("PUID")
 	}
 
+	// If a PUID is provided, add it to the request headers
 	if puid != "" {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
+	// Set the necessary headers for the request
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	request.Header.Set("Accept", "text/event-stream")
+	// If an access token is provided, add it to the request headers
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
 	}
+	// If an error occurs during header setting, return an empty response and the error
 	if err != nil {
 		return &http.Response{}, err
 	}
+	// Send the request and get the response
 	response, err := client.Do(request)
+	// Return the response and any error that occurred
 	return response, err
 }
 
 // Returns whether an error was handled
 func Handle_request_error(c *gin.Context, response *http.Response) bool {
+	// Check if the status code of the response is not 200 (OK)
 	if response.StatusCode != 200 {
-		// Try read response body as JSON
+		// Try to read the response body as JSON into a map
 		var error_response map[string]interface{}
 		err := json.NewDecoder(response.Body).Decode(&error_response)
+		// If there was an error reading the response body as JSON
 		if err != nil {
-			// Read response body
+			// Read the response body as a string
 			body, _ := io.ReadAll(response.Body)
+			// Send a JSON response with status code 500 (Internal Server Error) and the error details
 			c.JSON(500, gin.H{"error": gin.H{
 				"message": "Unknown error",
 				"type":    "internal_server_error",
@@ -89,16 +106,20 @@ func Handle_request_error(c *gin.Context, response *http.Response) bool {
 				"code":    "500",
 				"details": string(body),
 			}})
+			// Return true indicating that an error was handled
 			return true
 		}
+		// Send a JSON response with the original status code and the error details
 		c.JSON(response.StatusCode, gin.H{"error": gin.H{
 			"message": error_response["detail"],
 			"type":    response.Status,
 			"param":   nil,
 			"code":    "error",
 		}})
+		// Return true indicating that an error was handled
 		return true
 	}
+	// If the status code of the response is 200 (OK), return false indicating that no error was handled
 	return false
 }
 
@@ -112,32 +133,55 @@ type fileInfo struct {
 	Status      string `json:"status"`
 }
 
+// GetImageSource function retrieves the source of an image from a given URL
 func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string, puid string, idx int, imgSource []string) {
+	// Notify the WaitGroup that this function has completed once it returns
 	defer wg.Done()
+
+	// Create a new GET request to the provided URL
 	request, err := http.NewRequest(http.MethodGet, url, nil)
+	// If there was an error creating the request, return immediately
 	if err != nil {
 		return
 	}
-	// Clear cookies
+
+	// If a PUID is provided, add it to the request headers
 	if puid != "" {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
+
+	// Set the necessary headers for the request
 	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	request.Header.Set("Accept", "*/*")
+
+	// If a token is provided, add it to the request headers
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
+
+	// Send the request and get the response
 	response, err := client.Do(request)
+	// If there was an error sending the request, return immediately
 	if err != nil {
 		return
 	}
+
+	// Ensure the response body is closed once this function returns
 	defer response.Body.Close()
+
+	// Define a fileInfo struct to hold the response data
 	var file_info fileInfo
+
+	// Decode the response body into the fileInfo struct
 	err = json.NewDecoder(response.Body).Decode(&file_info)
+
+	// If there was an error decoding the response body, or if the status is not "success", return immediately
 	if err != nil || file_info.Status != "success" {
 		return
 	}
-	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
+
+	// Set the image source at the given index to the download URL from the response
+	//imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
 }
 
 func Handler(c *gin.Context, response *http.Response, token string, puid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
@@ -160,19 +204,27 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var isRole = true
 	var waitSource = false
 	var imgSource []string
+	
+	// Start reading the response line by line
 	for {
+		// Read a line from the response
 		line, err := reader.ReadString('\n')
+		// If an error occurs, check if it's EOF, if yes, break the loop, else return an empty string and nil
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			return "", nil
 		}
+		
+		// If the line length is less than 6, continue to the next iteration
 		if len(line) < 6 {
 			continue
 		}
+		
 		// Remove "data: " from the beginning of the line
 		line = line[6:]
+		
 		// Check if line starts with [DONE]
 		if !strings.HasPrefix(line, "[DONE]") {
 			// Parse the line as JSON
@@ -180,16 +232,20 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			if err != nil {
 				continue
 			}
+			// If the original response contains an error, return the error in the response and return an empty string and nil
 			if original_response.Error != nil {
 				c.JSON(500, gin.H{"error": original_response.Error})
 				return "", nil
 			}
+			// If the original response doesn't meet certain conditions, continue to the next iteration
 			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
 			}
+			// If the original response doesn't meet certain conditions, continue to the next iteration
 			if original_response.Message.Metadata.MessageType != "next" && original_response.Message.Metadata.MessageType != "continue" || !strings.HasSuffix(original_response.Message.Content.ContentType, "text") {
 				continue
 			}
+			// If the original response has an EndTurn field, process it
 			if original_response.Message.EndTurn != nil {
 				if waitSource {
 					waitSource = false
@@ -197,6 +253,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					continue
 				}
 			}
+			// If the original response has citations, process them
 			if len(original_response.Message.Metadata.Citations) != 0 {
 				r := []rune(original_response.Message.Content.Parts[0].(string))
 				if waitSource {
@@ -216,10 +273,15 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			} else if waitSource {
 				continue
 			}
+			// Initialize the response_string
 			response_string := ""
+
+			// If the recipient of the original response is not "all", continue to the next iteration
 			if original_response.Message.Recipient != "all" {
 				continue
 			}
+
+			// If the content type of the original response is "multimodal_text", process it
 			if original_response.Message.Content.ContentType == "multimodal_text" {
 				apiUrl := "https://chat.openai.com/backend-api/files/"
 				if FILES_REVERSE_PROXY != "" {
@@ -245,17 +307,23 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				}
 				response_string = "data: " + translated_response.String() + "\n\n"
 			}
+
+			// If the response_string is still empty, convert the original response to a string
 			if response_string == "" {
 				response_string = chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
 			}
+			
+			// If the response_string is still empty, continue to the next iteration
 			if response_string == "" {
 				continue
 			}
+			// If the response_string is "【", set waitSource to true and continue to the next iteration
 			if response_string == "【" {
 				waitSource = true
 				continue
 			}
 			isRole = false
+			// If stream is true, write the response_string to the response writer
 			if stream {
 				_, err = c.Writer.WriteString(response_string)
 				if err != nil {
@@ -265,6 +333,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			// Flush the response writer buffer to ensure that the client receives each line as it's written
 			c.Writer.Flush()
 
+			// If the original response has FinishDetails, process them
 			if original_response.Message.Metadata.FinishDetails != nil {
 				if original_response.Message.Metadata.FinishDetails.Type == "max_tokens" {
 					max_tokens = true
@@ -273,15 +342,18 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			}
 
 		} else {
+			// If the line starts with [DONE], process the final line
 			if stream {
 				final_line := official_types.StopChunk(finish_reason)
 				c.Writer.WriteString("data: " + final_line.String() + "\n\n")
 			}
 		}
 	}
+	// If max_tokens is false, return the joined imgSource and the previous text, and nil
 	if !max_tokens {
 		return strings.Join(imgSource, "") + previous_text.Text, nil
 	}
+	// If max_tokens is true, return the joined imgSource and the previous text, and a new ContinueInfo
 	return strings.Join(imgSource, "") + previous_text.Text, &ContinueInfo{
 		ConversationID: original_response.ConversationID,
 		ParentID:       original_response.Message.ID,
