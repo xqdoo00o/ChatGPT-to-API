@@ -73,7 +73,13 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	request.Header.Set("Accept", "text/event-stream")
+<<<<<<< HEAD
 	// If an access token is provided, add it to the request headers
+=======
+	if message.Model == "gpt-4" {
+		request.Header.Set("Openai-Sentinel-Arkose-Token", message.ArkoseToken)
+	}
+>>>>>>> 39cb4683a58e66d2d2e448bd7612e07989146790
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
 	}
