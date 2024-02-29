@@ -8,11 +8,12 @@ require (
 	github.com/bogdanfinn/tls-client v1.6.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-resty/resty/v2 v2.7.0
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
 	github.com/tidwall/gjson v1.14.4
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240119133540-9d0c14e31678
-	github.com/xqdoo00o/funcaptcha v0.0.0-20240119125440-13927300884f
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240229152233-ff4cededff72
+	github.com/xqdoo00o/funcaptcha v0.0.0-20240229151808-f73bef32f529
 	k8s.io/apimachinery v0.27.2
 )
 
@@ -44,9 +45,9 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	golang.org/x/arch v0.5.0 // indirect
-	golang.org/x/crypto v0.13.0 // indirect
-	golang.org/x/net v0.15.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
