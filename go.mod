@@ -12,8 +12,8 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
 	github.com/tidwall/gjson v1.14.4
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240229152233-ff4cededff72
-	github.com/xqdoo00o/funcaptcha v0.0.0-20240229151808-f73bef32f529
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240301070231-007172f194ee
+	github.com/xqdoo00o/funcaptcha v0.0.0-20240301070104-d5964026df90
 	k8s.io/apimachinery v0.27.2
 )
 
