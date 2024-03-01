@@ -35,7 +35,7 @@ type TokenExp struct {
 func getTokenExpire(tokenstring string) (time.Time, error) {
 	payLoadData := strings.Split(tokenstring, ".")[1]
 	// Decode payload
-	payload, err := base64.StdEncoding.DecodeString(payLoadData)
+	payload, err := base64.RawStdEncoding.DecodeString(payLoadData)
 	if err != nil {
 		return time.Time{}, err
 	}
