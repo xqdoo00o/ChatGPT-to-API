@@ -65,13 +65,10 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 		// If an error occurs during request creation, return an empty response and the error
 		return &http.Response{}, err
 	}
-
-	// If no PUID is provided, get it from the environment variables
+	// If PUID is not provided, check the environment
 	if puid == "" {
 		puid = os.Getenv("PUID")
 	}
-
-	// If a PUID is provided, add it to the request headers
 	if puid != "" {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
