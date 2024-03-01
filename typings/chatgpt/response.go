@@ -5,6 +5,27 @@ type ChatGPTResponse struct {
 	ConversationID string      `json:"conversation_id"`
 	Error          interface{} `json:"error"`
 }
+type ChatGPTWSSResponse struct {
+	WssUrl         string `json:"wss_url"`
+	ConversationId string `json:"conversation_id"`
+	ResponseId     string `json:"response_id"`
+}
+
+type WSSMsgResponse struct {
+	SequenceId int                `json:"sequenceId"`
+	Type       string             `json:"type"`
+	From       string             `json:"from"`
+	DataType   string             `json:"dataType"`
+	Data       WSSMsgResponseData `json:"data"`
+}
+
+type WSSMsgResponseData struct {
+	Type           string `json:"type"`
+	Body           string `json:"body"`
+	MoreBody       bool   `json:"more_body"`
+	ResponseId     string `json:"response_id"`
+	ConversationId string `json:"conversation_id"`
+}
 
 type Message struct {
 	ID         string      `json:"id"`

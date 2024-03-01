@@ -3,6 +3,7 @@ package chatgpt
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
@@ -11,6 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/gorilla/websocket"
+
+	hp "net/http"
 
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
@@ -30,6 +35,7 @@ var (
 	}...)
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
+	conn                *websocket.Conn
 )
 
 // POSTconversation function sends a POST request to the OpenAI API to start a conversation
@@ -73,13 +79,10 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	request.Header.Set("Accept", "text/event-stream")
-<<<<<<< HEAD
 	// If an access token is provided, add it to the request headers
-=======
 	if message.Model == "gpt-4" {
 		request.Header.Set("Openai-Sentinel-Arkose-Token", message.ArkoseToken)
 	}
->>>>>>> 39cb4683a58e66d2d2e448bd7612e07989146790
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
 	}
@@ -209,18 +212,72 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var original_response chatgpt_types.ChatGPTResponse
 	var isRole = true
 	var waitSource = false
+	var isEnd = false
 	var imgSource []string
-	
-	// Start reading the response line by line
-	for {
-		// Read a line from the response
-		line, err := reader.ReadString('\n')
-		// If an error occurs, check if it's EOF, if yes, break the loop, else return an empty string and nil
+	var isWSS = false
+	var convId string
+
+	firstStr, _ := reader.ReadString('\n')
+	if strings.Contains(firstStr, "\"wss_url\"") {
+		isWSS = true
+		var wssResponse chatgpt_types.ChatGPTWSSResponse
+		json.Unmarshal([]byte(firstStr), &wssResponse)
+		convId = wssResponse.ConversationId
+		wssUrl := wssResponse.WssUrl
+		header := make(hp.Header)
+		header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
+		var err error
+		conn, _, err = websocket.DefaultDialer.Dial(wssUrl, header)
 		if err != nil {
-			if err == io.EOF {
+			return "", nil
+		}
+
+	} else {
+		err := json.Unmarshal([]byte(firstStr[6:]), &original_response)
+		if err != nil {
+			return "", nil
+		}
+		if original_response.Error != nil {
+			c.JSON(500, gin.H{"error": original_response.Error})
+			return "", nil
+		}
+		convId = original_response.ConversationID
+	}
+	for {
+		var line string
+		var err error
+		if isWSS {
+			var messageType int
+			var message []byte
+			messageType, message, err = conn.ReadMessage()
+			if err != nil {
+				println(err.Error())
+				conn.Close()
 				break
 			}
-			return "", nil
+			if messageType == websocket.TextMessage {
+				var wssMsgResponse chatgpt_types.WSSMsgResponse
+				json.Unmarshal(message, &wssMsgResponse)
+				base64Body := wssMsgResponse.Data.Body
+				bodyByte, err := base64.StdEncoding.DecodeString(base64Body)
+				if err != nil {
+					continue
+				}
+				line = string(bodyByte)
+			}
+		} else {
+			if firstStr != "" {
+				line = firstStr
+				firstStr = ""
+			} else {
+				line, err = reader.ReadString('\n')
+			}
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return "", nil
+			}
 		}
 		
 		// If the line length is less than 6, continue to the next iteration
@@ -244,6 +301,9 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				return "", nil
 			}
 			// If the original response doesn't meet certain conditions, continue to the next iteration
+			if original_response.ConversationID != convId {
+				continue
+			}
 			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
 			}
@@ -255,9 +315,8 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			if original_response.Message.EndTurn != nil {
 				if waitSource {
 					waitSource = false
-				} else {
-					continue
 				}
+				isEnd = true
 			}
 			// If the original response has citations, process them
 			if len(original_response.Message.Metadata.Citations) != 0 {
@@ -346,12 +405,15 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				}
 				finish_reason = original_response.Message.Metadata.FinishDetails.Type
 			}
-
-		} else {
-			// If the line starts with [DONE], process the final line
-			if stream {
-				final_line := official_types.StopChunk(finish_reason)
-				c.Writer.WriteString("data: " + final_line.String() + "\n\n")
+			if isEnd {
+				if stream {
+					final_line := official_types.StopChunk(finish_reason)
+					c.Writer.WriteString("data: " + final_line.String() + "\n\n")
+				}
+				if isWSS {
+					conn.Close()
+				}
+				break
 			}
 		}
 	}
