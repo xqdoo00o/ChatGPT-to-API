@@ -20,7 +20,7 @@ var accounts []Account
 
 var validAccounts []string
 
-const interval = time.Hour * 24
+const interval = time.Hour * 24 * 10
 
 type Account struct {
 	Email    string `json:"username"`
@@ -163,7 +163,7 @@ func scheduleTokenPUID() {
 					if toExpire > 0 {
 						validAccounts = AppendIfNone(validAccounts, account.Email)
 						f := newTimeFunc(account, nil, true)
-						time.AfterFunc(toExpire, f)
+						time.AfterFunc(toExpire+time.Second, f)
 					} else {
 						updateSingleToken(account, nil, true)
 					}
@@ -226,7 +226,7 @@ func updateSingleToken(account Account, token_list map[string]tokens.Secret, cro
 	}
 	if cron {
 		f := newTimeFunc(account, token_list, cron)
-		time.AfterFunc(interval, f)
+		time.AfterFunc(interval+time.Second, f)
 	}
 }
 

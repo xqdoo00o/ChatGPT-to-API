@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -35,8 +36,65 @@ var (
 	}...)
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
-	conn                *websocket.Conn
+	connPool            = map[string]*websocket.Conn{}
 )
+
+func getWSURL(token string) (string, error) {
+	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/register-websocket", nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("Accept", "*/*")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	var WSSResp chatgpt_types.ChatGPTWSSResponse
+	err = json.NewDecoder(response.Body).Decode(&WSSResp)
+	if err != nil {
+		return "", err
+	}
+	return WSSResp.WssUrl, nil
+}
+
+func InitWSConn(token string, proxy string) error {
+	if connPool[token] == nil {
+		if proxy != "" {
+			client.SetProxy(proxy)
+		}
+		wssURL, err := getWSURL(token)
+		if err != nil {
+			return err
+		}
+		header := make(hp.Header)
+		header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
+		conn, _, err := websocket.DefaultDialer.Dial(wssURL, header)
+		if err != nil {
+			return nil
+		}
+		connPool[token] = conn
+		go func() {
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+			for {
+				<-ticker.C
+				if err := conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+					conn.Close()
+					connPool[token] = nil
+					return
+				}
+			}
+		}()
+		return nil
+	} else {
+		return nil
+	}
+}
 
 func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, proxy string) (*http.Response, error) {
 	if proxy != "" {
@@ -48,6 +106,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 		apiUrl = API_REVERSE_PROXY
 	}
 
+	arkoseToken := message.ArkoseToken
+	message.ArkoseToken = ""
 	// JSONify the body and add it to the request
 	body_json, err := json.Marshal(message)
 	if err != nil {
@@ -65,8 +125,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	request.Header.Set("Accept", "text/event-stream")
-	if message.Model == "gpt-4" {
-		request.Header.Set("Openai-Sentinel-Arkose-Token", message.ArkoseToken)
+	if arkoseToken != "" {
+		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
 	}
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
@@ -168,25 +228,21 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var imgSource []string
 	var isWSS = false
 	var convId string
+	var respId string
+	var conn *websocket.Conn
 
 	firstStr, _ := reader.ReadString('\n')
 	if strings.Contains(firstStr, "\"wss_url\"") {
 		isWSS = true
+		conn = connPool[token]
 		var wssResponse chatgpt_types.ChatGPTWSSResponse
 		json.Unmarshal([]byte(firstStr), &wssResponse)
+		respId = wssResponse.ResponseId
 		convId = wssResponse.ConversationId
-		wssUrl := wssResponse.WssUrl
-		header := make(hp.Header)
-		header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
-		var err error
-		conn, _, err = websocket.DefaultDialer.Dial(wssUrl, header)
-		if err != nil {
-			return "", nil
-		}
-
 	} else {
 		err := json.Unmarshal([]byte(firstStr[6:]), &original_response)
 		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
 			return "", nil
 		}
 		if original_response.Error != nil {
@@ -203,13 +259,17 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			var message []byte
 			messageType, message, err = conn.ReadMessage()
 			if err != nil {
-				println(err.Error())
+				c.JSON(500, gin.H{"error": err.Error()})
 				conn.Close()
-				break
+				connPool[token] = nil
+				return "", nil
 			}
 			if messageType == websocket.TextMessage {
 				var wssMsgResponse chatgpt_types.WSSMsgResponse
 				json.Unmarshal(message, &wssMsgResponse)
+				if wssMsgResponse.Data.ResponseId != respId {
+					continue
+				}
 				base64Body := wssMsgResponse.Data.Body
 				bodyByte, err := base64.StdEncoding.DecodeString(base64Body)
 				if err != nil {
@@ -314,7 +374,11 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				response_string = chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
 			}
 			if response_string == "" {
-				continue
+				if isEnd {
+					goto endProcess
+				} else {
+					continue
+				}
 			}
 			if response_string == "【" {
 				waitSource = true
@@ -327,6 +391,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					return "", nil
 				}
 			}
+		endProcess:
 			// Flush the response writer buffer to ensure that the client receives each line as it's written
 			c.Writer.Flush()
 
@@ -340,9 +405,6 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				if stream {
 					final_line := official_types.StopChunk(finish_reason)
 					c.Writer.WriteString("data: " + final_line.String() + "\n\n")
-				}
-				if isWSS {
-					conn.Close()
 				}
 				break
 			}

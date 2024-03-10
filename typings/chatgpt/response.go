@@ -7,8 +7,8 @@ type ChatGPTResponse struct {
 }
 type ChatGPTWSSResponse struct {
 	WssUrl         string `json:"wss_url"`
-	ConversationId string `json:"conversation_id"`
-	ResponseId     string `json:"response_id"`
+	ConversationId string `json:"conversation_id,omitempty"`
+	ResponseId     string `json:"response_id,omitempty"`
 }
 
 type WSSMsgResponse struct {

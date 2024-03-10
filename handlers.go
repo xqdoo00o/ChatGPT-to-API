@@ -100,7 +100,10 @@ func nightmare(c *gin.Context) {
 		// Push used proxy to the back of the list
 		proxies = append(proxies[1:], proxies[0])
 	}
-
+	err = chatgpt.InitWSConn(token, proxy_url)
+	if err != nil {
+		return
+	}
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, puid, proxy_url)
 
