@@ -39,6 +39,7 @@ var (
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string]*websocket.Conn{}
 	pingPool            = map[string]*time.Ticker{}
+	expirePool          = map[string]time.Time{}
 )
 
 func getWSURL(token string) (string, error) {
@@ -64,35 +65,53 @@ func getWSURL(token string) (string, error) {
 	return WSSResp.WssUrl, nil
 }
 
+func createWSConn(url string, token string, retry int) error {
+	header := make(hp.Header)
+	header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
+	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	if err != nil {
+		if retry > 3 {
+			return err
+		}
+		time.Sleep(time.Second)
+		return createWSConn(url, token, retry+1)
+	}
+	connPool[token] = conn
+	expirePool[token] = time.Now().Add(time.Minute * 30)
+	ticker := time.NewTicker(time.Second * 8)
+	pingPool[token] = ticker
+	go func(ticker *time.Ticker) {
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			if err := connPool[token].WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				connPool[token].Close()
+				connPool[token] = nil
+				break
+			}
+		}
+	}(ticker)
+	return nil
+}
+
 func InitWSConn(token string, proxy string) error {
-	if connPool[token] == nil {
+	if connPool[token] == nil || time.Now().After(expirePool[token]) {
 		if proxy != "" {
 			client.SetProxy(proxy)
+		}
+		if connPool[token] != nil {
+			pingPool[token].Stop()
+			connPool[token].Close()
+			connPool[token] = nil
 		}
 		wssURL, err := getWSURL(token)
 		if err != nil {
 			return err
 		}
-		header := make(hp.Header)
-		header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
-		conn, _, err := websocket.DefaultDialer.Dial(wssURL, header)
+		createWSConn(wssURL, token, 0)
 		if err != nil {
-			return nil
+			return err
 		}
-		connPool[token] = conn
-		ticker := time.NewTicker(time.Second * 8)
-		pingPool[token] = ticker
-		go func(ticker *time.Ticker) {
-			defer ticker.Stop()
-			for {
-				<-ticker.C
-				if err := connPool[token].WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-					connPool[token].Close()
-					connPool[token] = nil
-					break
-				}
-			}
-		}(ticker)
 		return nil
 	} else {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Millisecond*100)
@@ -260,6 +279,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var isWSS = false
 	var convId string
 	var respId string
+	var wssUrl string
 	var conn *websocket.Conn
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
@@ -267,6 +287,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 		conn = connPool[token]
 		var wssResponse chatgpt_types.ChatGPTWSSResponse
 		json.NewDecoder(response.Body).Decode(&wssResponse)
+		wssUrl = wssResponse.WssUrl
 		respId = wssResponse.ResponseId
 		convId = wssResponse.ConversationId
 	}
@@ -278,11 +299,16 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			var message []byte
 			messageType, message, err = conn.ReadMessage()
 			if err != nil {
-				c.JSON(500, gin.H{"error": err.Error()})
 				pingPool[token].Stop()
 				connPool[token].Close()
 				connPool[token] = nil
-				return "", nil
+				err := createWSConn(wssUrl, token, 0)
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return "", nil
+				}
+				conn = connPool[token]
+				continue
 			}
 			if messageType == websocket.TextMessage {
 				var wssMsgResponse chatgpt_types.WSSMsgResponse
