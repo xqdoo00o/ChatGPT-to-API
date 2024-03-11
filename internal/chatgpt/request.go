@@ -3,6 +3,7 @@ package chatgpt
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"freechatgpt/typings"
@@ -37,6 +38,7 @@ var (
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string]*websocket.Conn{}
+	pingPool            = map[string]*time.Ticker{}
 )
 
 func getWSURL(token string) (string, error) {
@@ -78,20 +80,49 @@ func InitWSConn(token string, proxy string) error {
 			return nil
 		}
 		connPool[token] = conn
-		go func() {
-			ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(time.Second * 8)
+		pingPool[token] = ticker
+		go func(ticker *time.Ticker) {
 			defer ticker.Stop()
 			for {
 				<-ticker.C
-				if err := conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-					conn.Close()
+				if err := connPool[token].WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+					connPool[token].Close()
 					connPool[token] = nil
-					return
+					break
+				}
+			}
+		}(ticker)
+		return nil
+	} else {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Millisecond*100)
+		go func() {
+			defer cancelFunc()
+			for {
+				_, _, err := connPool[token].NextReader()
+				if err != nil {
+					break
+				}
+				if ctx.Err() != nil {
+					break
 				}
 			}
 		}()
-		return nil
-	} else {
+		<-ctx.Done()
+		err := ctx.Err()
+		if err != nil {
+			switch err {
+			case context.Canceled:
+				pingPool[token].Stop()
+				connPool[token].Close()
+				connPool[token] = nil
+				return InitWSConn(token, proxy)
+			case context.DeadlineExceeded:
+				return nil
+			default:
+				return nil
+			}
+		}
 		return nil
 	}
 }
