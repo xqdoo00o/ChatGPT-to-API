@@ -262,25 +262,13 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var respId string
 	var conn *websocket.Conn
 
-	firstStr, _ := reader.ReadString('\n')
-	if strings.Contains(firstStr, "\"wss_url\"") {
+	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
 		conn = connPool[token]
 		var wssResponse chatgpt_types.ChatGPTWSSResponse
-		json.Unmarshal([]byte(firstStr), &wssResponse)
+		json.NewDecoder(response.Body).Decode(&wssResponse)
 		respId = wssResponse.ResponseId
 		convId = wssResponse.ConversationId
-	} else {
-		err := json.Unmarshal([]byte(firstStr[6:]), &original_response)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return "", nil
-		}
-		if original_response.Error != nil {
-			c.JSON(500, gin.H{"error": original_response.Error})
-			return "", nil
-		}
-		convId = original_response.ConversationID
 	}
 	for {
 		var line string
@@ -310,12 +298,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				line = string(bodyByte)
 			}
 		} else {
-			if firstStr != "" {
-				line = firstStr
-				firstStr = ""
-			} else {
-				line, err = reader.ReadString('\n')
-			}
+			line, err = reader.ReadString('\n')
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -340,7 +323,11 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				return "", nil
 			}
 			if original_response.ConversationID != convId {
-				continue
+				if convId == "" {
+					convId = original_response.ConversationID
+				} else {
+					continue
+				}
 			}
 			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
