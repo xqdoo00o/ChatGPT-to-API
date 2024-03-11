@@ -291,7 +291,8 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			messageType, message, err = conn.ReadMessage()
 			if err != nil {
 				c.JSON(500, gin.H{"error": err.Error()})
-				conn.Close()
+				pingPool[token].Stop()
+				connPool[token].Close()
 				connPool[token] = nil
 				return "", nil
 			}
