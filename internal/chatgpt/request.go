@@ -29,6 +29,14 @@ import (
 	official_types "freechatgpt/typings/official"
 )
 
+type connInfo struct {
+	conn   *websocket.Conn
+	uuid   string
+	expire time.Time
+	ticker *time.Ticker
+	lock   bool
+}
+
 var (
 	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
 		tls_client.WithCookieJar(tls_client.NewCookieJar()),
@@ -37,9 +45,7 @@ var (
 	}...)
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
-	connPool            = map[string]*websocket.Conn{}
-	pingPool            = map[string]*time.Ticker{}
-	expirePool          = map[string]time.Time{}
+	connPool            = map[string][]*connInfo{}
 )
 
 func getWSURL(token string) (string, error) {
@@ -65,7 +71,7 @@ func getWSURL(token string) (string, error) {
 	return WSSResp.WssUrl, nil
 }
 
-func createWSConn(url string, token string, retry int) error {
+func createWSConn(url string, connInfo *connInfo, retry int) error {
 	header := make(hp.Header)
 	header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
 	conn, _, err := websocket.DefaultDialer.Dial(url, header)
@@ -73,20 +79,20 @@ func createWSConn(url string, token string, retry int) error {
 		if retry > 3 {
 			return err
 		}
-		time.Sleep(time.Second)
-		return createWSConn(url, token, retry+1)
+		time.Sleep(time.Second) // wait 1s to recreate ws
+		return createWSConn(url, connInfo, retry+1)
 	}
-	connPool[token] = conn
-	expirePool[token] = time.Now().Add(time.Minute * 30)
+	connInfo.conn = conn
+	connInfo.expire = time.Now().Add(time.Minute * 30)
 	ticker := time.NewTicker(time.Second * 8)
-	pingPool[token] = ticker
+	connInfo.ticker = ticker
 	go func(ticker *time.Ticker) {
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			if err := connPool[token].WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-				connPool[token].Close()
-				connPool[token] = nil
+			if err := connInfo.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				connInfo.conn.Close()
+				connInfo.conn = nil
 				break
 			}
 		}
@@ -94,21 +100,51 @@ func createWSConn(url string, token string, retry int) error {
 	return nil
 }
 
-func InitWSConn(token string, proxy string) error {
-	if connPool[token] == nil || time.Now().After(expirePool[token]) {
+func findAvailConn(token string, uuid string) *connInfo {
+	for _, value := range connPool[token] {
+		if !value.lock {
+			value.lock = true
+			value.uuid = uuid
+			return value
+		}
+	}
+	newConnInfo := connInfo{uuid: uuid, lock: true}
+	connPool[token] = append(connPool[token], &newConnInfo)
+	return &newConnInfo
+}
+func findSpecConn(token string, uuid string) *connInfo {
+	for _, value := range connPool[token] {
+		if value.uuid == uuid {
+			return value
+		}
+	}
+	return &connInfo{}
+}
+func UnlockSpecConn(token string, uuid string) {
+	for _, value := range connPool[token] {
+		if value.uuid == uuid {
+			value.lock = false
+		}
+	}
+}
+func InitWSConn(token string, uuid string, proxy string) error {
+	connInfo := findAvailConn(token, uuid)
+	conn := connInfo.conn
+	isExpired := connInfo.expire.IsZero() || time.Now().After(connInfo.expire)
+	if conn == nil || isExpired {
 		if proxy != "" {
 			client.SetProxy(proxy)
 		}
-		if connPool[token] != nil {
-			pingPool[token].Stop()
-			connPool[token].Close()
-			connPool[token] = nil
+		if conn != nil {
+			connInfo.ticker.Stop()
+			conn.Close()
+			connInfo.conn = nil
 		}
 		wssURL, err := getWSURL(token)
 		if err != nil {
 			return err
 		}
-		createWSConn(wssURL, token, 0)
+		createWSConn(wssURL, connInfo, 0)
 		if err != nil {
 			return err
 		}
@@ -118,7 +154,7 @@ func InitWSConn(token string, proxy string) error {
 		go func() {
 			defer cancelFunc()
 			for {
-				_, _, err := connPool[token].NextReader()
+				_, _, err := conn.NextReader()
 				if err != nil {
 					break
 				}
@@ -132,10 +168,11 @@ func InitWSConn(token string, proxy string) error {
 		if err != nil {
 			switch err {
 			case context.Canceled:
-				pingPool[token].Stop()
-				connPool[token].Close()
-				connPool[token] = nil
-				return InitWSConn(token, proxy)
+				connInfo.ticker.Stop()
+				conn.Close()
+				connInfo.conn = nil
+				connInfo.lock = false
+				return InitWSConn(token, uuid, proxy)
 			case context.DeadlineExceeded:
 				return nil
 			default:
@@ -255,7 +292,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
 }
 
-func Handler(c *gin.Context, response *http.Response, token string, puid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
+func Handler(c *gin.Context, response *http.Response, token string, puid string, uuid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
 	max_tokens := false
 
 	// Create a bufio.Reader from the response body
@@ -280,11 +317,15 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var convId string
 	var respId string
 	var wssUrl string
-	var conn *websocket.Conn
+	var connInfo *connInfo
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
-		conn = connPool[token]
+		connInfo = findSpecConn(token, uuid)
+		if connInfo.conn == nil {
+			c.JSON(500, gin.H{"error": "No websocket connection"})
+			return "", nil
+		}
 		var wssResponse chatgpt_types.ChatGPTWSSResponse
 		json.NewDecoder(response.Body).Decode(&wssResponse)
 		wssUrl = wssResponse.WssUrl
@@ -297,17 +338,16 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 		if isWSS {
 			var messageType int
 			var message []byte
-			messageType, message, err = conn.ReadMessage()
+			messageType, message, err = connInfo.conn.ReadMessage()
 			if err != nil {
-				pingPool[token].Stop()
-				connPool[token].Close()
-				connPool[token] = nil
-				err := createWSConn(wssUrl, token, 0)
+				connInfo.ticker.Stop()
+				connInfo.conn.Close()
+				connInfo.conn = nil
+				err := createWSConn(wssUrl, connInfo, 0)
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return "", nil
 				}
-				conn = connPool[token]
 				continue
 			}
 			if messageType == websocket.TextMessage {
