@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
-
 	hp "net/http"
+
+	"github.com/gorilla/websocket"
 
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
@@ -48,7 +48,7 @@ var (
 	connPool            = map[string][]*connInfo{}
 )
 
-func getWSURL(token string) (string, error) {
+func getWSURL(token string, retry int) (string, error) {
 	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/register-websocket", nil)
 	if err != nil {
 		return "", err
@@ -60,7 +60,11 @@ func getWSURL(token string) (string, error) {
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return "", err
+		if retry > 3 {
+			return "", err
+		}
+		time.Sleep(time.Second) // wait 1s to get ws url
+		return getWSURL(token, retry+1)
 	}
 	defer response.Body.Close()
 	var WSSResp chatgpt_types.ChatGPTWSSResponse
@@ -74,7 +78,12 @@ func getWSURL(token string) (string, error) {
 func createWSConn(url string, connInfo *connInfo, retry int) error {
 	header := make(hp.Header)
 	header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
-	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	dialer := websocket.Dialer{
+		Proxy:             hp.ProxyFromEnvironment,
+		HandshakeTimeout:  45 * time.Second,
+		EnableCompression: true,
+	}
+	conn, _, err := dialer.Dial(url, header)
 	if err != nil {
 		if retry > 3 {
 			return err
@@ -140,7 +149,7 @@ func InitWSConn(token string, uuid string, proxy string) error {
 			conn.Close()
 			connInfo.conn = nil
 		}
-		wssURL, err := getWSURL(token)
+		wssURL, err := getWSURL(token, 0)
 		if err != nil {
 			return err
 		}
@@ -318,6 +327,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var respId string
 	var wssUrl string
 	var connInfo *connInfo
+	var wsSeq int
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
@@ -340,6 +350,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			var message []byte
 			messageType, message, err = connInfo.conn.ReadMessage()
 			if err != nil {
+				println(err.Error())
 				connInfo.ticker.Stop()
 				connInfo.conn.Close()
 				connInfo.conn = nil
@@ -348,6 +359,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					c.JSON(500, gin.H{"error": err.Error()})
 					return "", nil
 				}
+				connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
 				continue
 			}
 			if messageType == websocket.TextMessage {
@@ -355,6 +367,10 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				json.Unmarshal(message, &wssMsgResponse)
 				if wssMsgResponse.Data.ResponseId != respId {
 					continue
+				}
+				wsSeq = wssMsgResponse.SequenceId
+				if wsSeq%50 == 0 {
+					connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
 				}
 				base64Body := wssMsgResponse.Data.Body
 				bodyByte, err := base64.StdEncoding.DecodeString(base64Body)
