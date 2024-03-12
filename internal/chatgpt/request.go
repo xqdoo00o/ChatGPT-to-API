@@ -3,6 +3,7 @@ package chatgpt
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"freechatgpt/typings"
@@ -12,10 +13,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/gorilla/websocket"
+	"time"
 
 	hp "net/http"
+
+	"github.com/gorilla/websocket"
 
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
@@ -27,6 +29,14 @@ import (
 	official_types "freechatgpt/typings/official"
 )
 
+type connInfo struct {
+	conn   *websocket.Conn
+	uuid   string
+	expire time.Time
+	ticker *time.Ticker
+	lock   bool
+}
+
 var (
 	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
 		tls_client.WithCookieJar(tls_client.NewCookieJar()),
@@ -35,8 +45,152 @@ var (
 	}...)
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
-	conn                *websocket.Conn
+	connPool            = map[string][]*connInfo{}
 )
+
+func getWSURL(token string, retry int) (string, error) {
+	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/register-websocket", nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("Accept", "*/*")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		if retry > 3 {
+			return "", err
+		}
+		time.Sleep(time.Second) // wait 1s to get ws url
+		return getWSURL(token, retry+1)
+	}
+	defer response.Body.Close()
+	var WSSResp chatgpt_types.ChatGPTWSSResponse
+	err = json.NewDecoder(response.Body).Decode(&WSSResp)
+	if err != nil {
+		return "", err
+	}
+	return WSSResp.WssUrl, nil
+}
+
+func createWSConn(url string, connInfo *connInfo, retry int) error {
+	header := make(hp.Header)
+	header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
+	dialer := websocket.Dialer{
+		Proxy:             hp.ProxyFromEnvironment,
+		HandshakeTimeout:  45 * time.Second,
+		EnableCompression: true,
+	}
+	conn, _, err := dialer.Dial(url, header)
+	if err != nil {
+		if retry > 3 {
+			return err
+		}
+		time.Sleep(time.Second) // wait 1s to recreate ws
+		return createWSConn(url, connInfo, retry+1)
+	}
+	connInfo.conn = conn
+	connInfo.expire = time.Now().Add(time.Minute * 30)
+	ticker := time.NewTicker(time.Second * 8)
+	connInfo.ticker = ticker
+	go func(ticker *time.Ticker) {
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			if err := connInfo.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				connInfo.conn.Close()
+				connInfo.conn = nil
+				break
+			}
+		}
+	}(ticker)
+	return nil
+}
+
+func findAvailConn(token string, uuid string) *connInfo {
+	for _, value := range connPool[token] {
+		if !value.lock {
+			value.lock = true
+			value.uuid = uuid
+			return value
+		}
+	}
+	newConnInfo := connInfo{uuid: uuid, lock: true}
+	connPool[token] = append(connPool[token], &newConnInfo)
+	return &newConnInfo
+}
+func findSpecConn(token string, uuid string) *connInfo {
+	for _, value := range connPool[token] {
+		if value.uuid == uuid {
+			return value
+		}
+	}
+	return &connInfo{}
+}
+func UnlockSpecConn(token string, uuid string) {
+	for _, value := range connPool[token] {
+		if value.uuid == uuid {
+			value.lock = false
+		}
+	}
+}
+func InitWSConn(token string, uuid string, proxy string) error {
+	connInfo := findAvailConn(token, uuid)
+	conn := connInfo.conn
+	isExpired := connInfo.expire.IsZero() || time.Now().After(connInfo.expire)
+	if conn == nil || isExpired {
+		if proxy != "" {
+			client.SetProxy(proxy)
+		}
+		if conn != nil {
+			connInfo.ticker.Stop()
+			conn.Close()
+			connInfo.conn = nil
+		}
+		wssURL, err := getWSURL(token, 0)
+		if err != nil {
+			return err
+		}
+		createWSConn(wssURL, connInfo, 0)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else {
+		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Millisecond*100)
+		go func() {
+			defer cancelFunc()
+			for {
+				_, _, err := conn.NextReader()
+				if err != nil {
+					break
+				}
+				if ctx.Err() != nil {
+					break
+				}
+			}
+		}()
+		<-ctx.Done()
+		err := ctx.Err()
+		if err != nil {
+			switch err {
+			case context.Canceled:
+				connInfo.ticker.Stop()
+				conn.Close()
+				connInfo.conn = nil
+				connInfo.lock = false
+				return InitWSConn(token, uuid, proxy)
+			case context.DeadlineExceeded:
+				return nil
+			default:
+				return nil
+			}
+		}
+		return nil
+	}
+}
 
 // POSTconversation function sends a POST request to the OpenAI API to start a conversation
 func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, proxy string) (*http.Response, error) {
@@ -52,7 +206,9 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 		apiUrl = API_REVERSE_PROXY
 	}
 
-	// Convert the message to JSON format
+	arkoseToken := message.ArkoseToken
+	message.ArkoseToken = ""
+	// JSONify the body and add it to the request
 	body_json, err := json.Marshal(message)
 	if err != nil {
 		// If an error occurs during conversion, return an empty response and the error
@@ -76,9 +232,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	request.Header.Set("Accept", "text/event-stream")
-	// If an access token is provided, add it to the request headers
-	if message.Model == "gpt-4" {
-		request.Header.Set("Openai-Sentinel-Arkose-Token", message.ArkoseToken)
+	if arkoseToken != "" {
+		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
 	}
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
@@ -190,7 +345,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 	//imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
 }
 
-func Handler(c *gin.Context, response *http.Response, token string, puid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
+func Handler(c *gin.Context, response *http.Response, token string, puid string, uuid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
 	max_tokens := false
 
 	// Create a bufio.Reader from the response body
@@ -213,32 +368,23 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var imgSource []string
 	var isWSS = false
 	var convId string
+	var respId string
+	var wssUrl string
+	var connInfo *connInfo
+	var wsSeq int
 
-	firstStr, _ := reader.ReadString('\n')
-	if strings.Contains(firstStr, "\"wss_url\"") {
+	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
+		connInfo = findSpecConn(token, uuid)
+		if connInfo.conn == nil {
+			c.JSON(500, gin.H{"error": "No websocket connection"})
+			return "", nil
+		}
 		var wssResponse chatgpt_types.ChatGPTWSSResponse
-		json.Unmarshal([]byte(firstStr), &wssResponse)
+		json.NewDecoder(response.Body).Decode(&wssResponse)
+		wssUrl = wssResponse.WssUrl
+		respId = wssResponse.ResponseId
 		convId = wssResponse.ConversationId
-		wssUrl := wssResponse.WssUrl
-		header := make(hp.Header)
-		header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
-		var err error
-		conn, _, err = websocket.DefaultDialer.Dial(wssUrl, header)
-		if err != nil {
-			return "", nil
-		}
-
-	} else {
-		err := json.Unmarshal([]byte(firstStr[6:]), &original_response)
-		if err != nil {
-			return "", nil
-		}
-		if original_response.Error != nil {
-			c.JSON(500, gin.H{"error": original_response.Error})
-			return "", nil
-		}
-		convId = original_response.ConversationID
 	}
 	for {
 		var line string
@@ -246,15 +392,30 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 		if isWSS {
 			var messageType int
 			var message []byte
-			messageType, message, err = conn.ReadMessage()
+			messageType, message, err = connInfo.conn.ReadMessage()
 			if err != nil {
 				println(err.Error())
-				conn.Close()
-				break
+				connInfo.ticker.Stop()
+				connInfo.conn.Close()
+				connInfo.conn = nil
+				err := createWSConn(wssUrl, connInfo, 0)
+				if err != nil {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return "", nil
+				}
+				connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
+				continue
 			}
 			if messageType == websocket.TextMessage {
 				var wssMsgResponse chatgpt_types.WSSMsgResponse
 				json.Unmarshal(message, &wssMsgResponse)
+				if wssMsgResponse.Data.ResponseId != respId {
+					continue
+				}
+				wsSeq = wssMsgResponse.SequenceId
+				if wsSeq%50 == 0 {
+					connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
+				}
 				base64Body := wssMsgResponse.Data.Body
 				bodyByte, err := base64.StdEncoding.DecodeString(base64Body)
 				if err != nil {
@@ -263,12 +424,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				line = string(bodyByte)
 			}
 		} else {
-			if firstStr != "" {
-				line = firstStr
-				firstStr = ""
-			} else {
-				line, err = reader.ReadString('\n')
-			}
+			line, err = reader.ReadString('\n')
 			if err != nil {
 				if err == io.EOF {
 					break
@@ -276,15 +432,15 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				return "", nil
 			}
 		}
-		
+
 		// If the line length is less than 6, continue to the next iteration
 		if len(line) < 6 {
 			continue
 		}
-		
+
 		// Remove "data: " from the beginning of the line
 		line = line[6:]
-		
+
 		// Check if line starts with [DONE]
 		if !strings.HasPrefix(line, "[DONE]") {
 			// Parse the line as JSON
@@ -299,7 +455,11 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			}
 			// If the original response doesn't meet certain conditions, continue to the next iteration
 			if original_response.ConversationID != convId {
-				continue
+				if convId == "" {
+					convId = original_response.ConversationID
+				} else {
+					continue
+				}
 			}
 			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
@@ -374,10 +534,14 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			if response_string == "" {
 				response_string = chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
 			}
-			
+
 			// If the response_string is still empty, continue to the next iteration
 			if response_string == "" {
-				continue
+				if isEnd {
+					goto endProcess
+				} else {
+					continue
+				}
 			}
 			// If the response_string is "【", set waitSource to true and continue to the next iteration
 			if response_string == "【" {
@@ -392,6 +556,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					return "", nil
 				}
 			}
+		endProcess:
 			// Flush the response writer buffer to ensure that the client receives each line as it's written
 			c.Writer.Flush()
 
@@ -406,9 +571,6 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				if stream {
 					final_line := official_types.StopChunk(finish_reason)
 					c.Writer.WriteString("data: " + final_line.String() + "\n\n")
-				}
-				if isWSS {
-					conn.Close()
 				}
 				break
 			}
