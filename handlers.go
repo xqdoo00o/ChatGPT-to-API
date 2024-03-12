@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func passwordHandler(c *gin.Context) {
@@ -148,7 +149,11 @@ func nightmare(c *gin.Context) {
 		// Push used proxy to the back of the list
 		proxies = append(proxies[1:], proxies[0])
 	}
-
+	uid := uuid.NewString()
+	err = chatgpt.InitWSConn(token, uid, proxy_url)
+	if err != nil {
+		return
+	}
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, puid, proxy_url)
 
@@ -167,7 +172,7 @@ func nightmare(c *gin.Context) {
 	for i := 3; i > 0; i-- {
 		var continue_info *chatgpt.ContinueInfo
 		var response_part string
-		response_part, continue_info = chatgpt.Handler(c, response, token, puid, translated_request, original_request.Stream)
+		response_part, continue_info = chatgpt.Handler(c, response, token, puid, uid, translated_request, original_request.Stream)
 		full_response += response_part
 		if continue_info == nil {
 			break
@@ -200,5 +205,5 @@ func nightmare(c *gin.Context) {
 	} else {
 		c.String(200, "data: [DONE]\n\n")
 	}
-
+	chatgpt.UnlockSpecConn(token, uid)
 }
