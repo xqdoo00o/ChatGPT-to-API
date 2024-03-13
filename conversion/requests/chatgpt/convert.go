@@ -9,7 +9,7 @@ import (
 	arkose "github.com/xqdoo00o/funcaptcha"
 )
 
-func ConvertAPIRequest(api_request official_types.APIRequest, puid string, proxy string) chatgpt_types.ChatGPTRequest {
+func ConvertAPIRequest(api_request official_types.APIRequest, puid string, requireArk bool, proxy string) chatgpt_types.ChatGPTRequest {
 	chatgpt_request := chatgpt_types.NewChatGPTRequest()
 	var api_version int
 	if strings.HasPrefix(api_request.Model, "gpt-3.5") {
@@ -22,6 +22,8 @@ func ConvertAPIRequest(api_request official_types.APIRequest, puid string, proxy
 		if len(api_request.Model) >= 7 && api_request.Model[6] >= 48 && api_request.Model[6] <= 57 {
 			chatgpt_request.Model = "gpt-4"
 		}
+	}
+	if requireArk {
 		token, err := arkose.GetOpenAIToken(api_version, puid, proxy)
 		if err == nil {
 			chatgpt_request.ArkoseToken = token

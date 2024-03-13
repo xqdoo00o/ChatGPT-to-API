@@ -192,7 +192,49 @@ func InitWSConn(token string, uuid string, proxy string) error {
 	}
 }
 
-func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, proxy string) (*http.Response, error) {
+type ChatRequire struct {
+	Token  string `json:"token"`
+	Arkose struct {
+		Required bool   `json:"required"`
+		DX       string `json:"dx,omitempty"`
+	} `json:"arkose"`
+}
+
+func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+
+	apiUrl := "https://chat.openai.com/backend-api/sentinel/chat-requirements"
+
+	request, err := http.NewRequest(http.MethodPost, apiUrl, bytes.NewBuffer([]byte(`{"conversation_mode_kind":"primary_assistant"}`)))
+	if err != nil {
+		return nil
+	}
+	if puid != "" {
+		request.Header.Set("Cookie", "_puid="+puid+";")
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	if access_token != "" {
+		request.Header.Set("Authorization", "Bearer "+access_token)
+	}
+	if err != nil {
+		return nil
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	var require ChatRequire
+	err = json.NewDecoder(response.Body).Decode(&require)
+	if err != nil {
+		return nil
+	}
+	return &require
+}
+func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, chat_token string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -223,6 +265,9 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	request.Header.Set("Accept", "text/event-stream")
 	if arkoseToken != "" {
 		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
+	}
+	if chat_token != "" {
+		request.Header.Set("Openai-Sentinel-Chat-Requirements-Token", chat_token)
 	}
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
