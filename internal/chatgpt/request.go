@@ -9,7 +9,6 @@ import (
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -235,6 +234,7 @@ func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
 	}
 	return &require
 }
+
 func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, chat_token string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
@@ -375,6 +375,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var connInfo *connInfo
 	var wsSeq int
 	var isWSInterrupt bool = false
+	var interruptTimer *time.Timer
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
@@ -388,11 +389,6 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 		wssUrl = wssResponse.WssUrl
 		respId = wssResponse.ResponseId
 		convId = wssResponse.ConversationId
-		defer func() {
-			if connInfo.conn != nil {
-				connInfo.conn.SetReadDeadline(time.Time{})
-			}
-		}()
 	}
 	for {
 		var line string
@@ -401,14 +397,20 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			var messageType int
 			var message []byte
 			if isWSInterrupt {
-				connInfo.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+				if interruptTimer == nil {
+					interruptTimer = time.NewTimer(10 * time.Second)
+				}
+				select {
+				case <-interruptTimer.C:
+					c.JSON(500, gin.H{"error": "WS interrupt & new WS timeout"})
+					return "", nil
+				default:
+					goto reader
+				}
 			}
+		reader:
 			messageType, message, err = connInfo.conn.ReadMessage()
 			if err != nil {
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					c.JSON(500, gin.H{"error": err.Error()})
-					return "", nil
-				}
 				connInfo.ticker.Stop()
 				connInfo.conn.Close()
 				connInfo.conn = nil
@@ -438,7 +440,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				}
 				if isWSInterrupt {
 					isWSInterrupt = false
-					connInfo.conn.SetReadDeadline(time.Time{})
+					interruptTimer.Stop()
 				}
 				line = string(bodyByte)
 			}

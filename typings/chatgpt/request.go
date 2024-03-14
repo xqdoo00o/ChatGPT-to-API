@@ -23,7 +23,7 @@ type chatgpt_author struct {
 
 type ChatGPTRequest struct {
 	Action                     string            `json:"action"`
-	Messages                   []chatgpt_message `json:"messages"`
+	Messages                   []chatgpt_message `json:"messages,omitempty"`
 	ParentMessageID            string            `json:"parent_message_id,omitempty"`
 	ConversationID             string            `json:"conversation_id,omitempty"`
 	Model                      string            `json:"model"`
