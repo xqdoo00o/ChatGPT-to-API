@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	hp "net/http"
-
 	"github.com/gorilla/websocket"
 
 	http "github.com/bogdanfinn/fhttp"
@@ -76,14 +74,10 @@ func getWSURL(token string, retry int) (string, error) {
 }
 
 func createWSConn(url string, connInfo *connInfo, retry int) error {
-	header := make(hp.Header)
-	header.Add("Sec-WebSocket-Protocol", "json.reliable.webpubsub.azure.v1")
-	dialer := websocket.Dialer{
-		Proxy:             hp.ProxyFromEnvironment,
-		HandshakeTimeout:  45 * time.Second,
-		EnableCompression: true,
-	}
-	conn, _, err := dialer.Dial(url, header)
+	dialer := websocket.DefaultDialer
+	dialer.EnableCompression = true
+	dialer.Subprotocols = []string{"json.reliable.webpubsub.azure.v1"}
+	conn, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		if retry > 3 {
 			return err
