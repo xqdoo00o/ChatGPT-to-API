@@ -9,6 +9,7 @@ import (
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -373,6 +374,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 	var wssUrl string
 	var connInfo *connInfo
 	var wsSeq int
+	var isWSInterrupt bool = false
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
@@ -386,6 +388,11 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 		wssUrl = wssResponse.WssUrl
 		respId = wssResponse.ResponseId
 		convId = wssResponse.ConversationId
+		defer func() {
+			if connInfo.conn != nil {
+				connInfo.conn.SetReadDeadline(time.Time{})
+			}
+		}()
 	}
 	for {
 		var line string
@@ -393,9 +400,15 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 		if isWSS {
 			var messageType int
 			var message []byte
+			if isWSInterrupt {
+				connInfo.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			}
 			messageType, message, err = connInfo.conn.ReadMessage()
 			if err != nil {
-				println(err.Error())
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					c.JSON(500, gin.H{"error": err.Error()})
+					return "", nil
+				}
 				connInfo.ticker.Stop()
 				connInfo.conn.Close()
 				connInfo.conn = nil
@@ -404,6 +417,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					c.JSON(500, gin.H{"error": err.Error()})
 					return "", nil
 				}
+				isWSInterrupt = true
 				connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
 				continue
 			}

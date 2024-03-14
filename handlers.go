@@ -7,6 +7,7 @@ import (
 	official_types "freechatgpt/typings/official"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -102,11 +103,22 @@ func nightmare(c *gin.Context) {
 		proxies = append(proxies[1:], proxies[0])
 	}
 	uid := uuid.NewString()
-	err = chatgpt.InitWSConn(token, uid, proxy_url)
+	var chat_require *chatgpt.ChatRequire
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		err = chatgpt.InitWSConn(token, uid, proxy_url)
+	}()
+	go func() {
+		defer wg.Done()
+		chat_require = chatgpt.CheckRequire(token, puid, proxy_url)
+	}()
+	wg.Wait()
 	if err != nil {
+		c.JSON(500, gin.H{"error": "unable to create ws tunnel"})
 		return
 	}
-	chat_require := chatgpt.CheckRequire(token, puid, proxy_url)
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, puid, chat_require.Arkose.Required, proxy_url)
 
