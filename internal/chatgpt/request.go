@@ -436,6 +436,10 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 				if err != nil {
 					continue
 				}
+				if isWSInterrupt {
+					isWSInterrupt = false
+					connInfo.conn.SetReadDeadline(time.Time{})
+				}
 				line = string(bodyByte)
 			}
 		} else {
