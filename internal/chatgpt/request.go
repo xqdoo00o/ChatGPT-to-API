@@ -44,6 +44,7 @@ var (
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string][]*connInfo{}
+	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
 func getWSURL(token string, retry int) (string, error) {
@@ -51,8 +52,9 @@ func getWSURL(token string, retry int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Oai-Language", "en-US")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -209,7 +211,8 @@ func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("User-Agent", userAgent)
+	request.Header.Set("Oai-Language", "en-US")
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
 	}
@@ -256,8 +259,9 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set("Oai-Language", "en-US")
 	if arkoseToken != "" {
 		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
 	}
@@ -323,7 +327,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 	if puid != "" {
 		request.Header.Set("Cookie", "_puid="+puid+";")
 	}
-	request.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
