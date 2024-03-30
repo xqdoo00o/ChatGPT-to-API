@@ -9,6 +9,7 @@ import (
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -201,9 +202,7 @@ func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
 		client.SetProxy(proxy)
 	}
 
-	apiUrl := "https://chat.openai.com/backend-api/sentinel/chat-requirements"
-
-	request, err := http.NewRequest(http.MethodPost, apiUrl, bytes.NewBuffer([]byte(`{"conversation_mode_kind":"primary_assistant"}`)))
+	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/sentinel/chat-requirements", bytes.NewBuffer([]byte(`{"conversation_mode_kind":"primary_assistant"}`)))
 	if err != nil {
 		return nil
 	}
@@ -230,6 +229,43 @@ func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
 		return nil
 	}
 	return &require
+}
+
+var urlAttrMap = make(map[string]string)
+
+type urlAttr struct {
+	Url         string `json:"url"`
+	Attribution string `json:"attribution"`
+}
+
+func getURLAttribution(access_token string, puid string, url string) string {
+	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/attributions", bytes.NewBuffer([]byte(`{"urls":["`+url+`"]}`)))
+	if err != nil {
+		return ""
+	}
+	if puid != "" {
+		request.Header.Set("Cookie", "_puid="+puid+";")
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Agent", userAgent)
+	request.Header.Set("Oai-Language", "en-US")
+	if access_token != "" {
+		request.Header.Set("Authorization", "Bearer "+access_token)
+	}
+	if err != nil {
+		return ""
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return ""
+	}
+	defer response.Body.Close()
+	var attr urlAttr
+	err = json.NewDecoder(response.Body).Decode(&attr)
+	if err != nil {
+		return ""
+	}
+	return attr.Attribution
 }
 
 func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, chat_token string, proxy string) (*http.Response, error) {
@@ -477,6 +513,9 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
 			}
+			if original_response.Message.Metadata.MessageType == "" {
+				continue
+			}
 			if original_response.Message.Metadata.MessageType != "next" && original_response.Message.Metadata.MessageType != "continue" || !strings.HasSuffix(original_response.Message.Content.ContentType, "text") {
 				continue
 			}
@@ -496,9 +535,18 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					}
 				}
 				offset := 0
-				for i, citation := range original_response.Message.Metadata.Citations {
+				for _, citation := range original_response.Message.Metadata.Citations {
 					rl := len(r)
-					original_response.Message.Content.Parts[0] = string(r[:citation.StartIx+offset]) + "[^" + strconv.Itoa(i+1) + "^](" + citation.Metadata.URL + " \"" + citation.Metadata.Title + "\")" + string(r[citation.EndIx+offset:])
+					attr := urlAttrMap[citation.Metadata.URL]
+					if attr == "" {
+						u, _ := url.Parse(citation.Metadata.URL)
+						baseURL := u.Scheme + "://" + u.Host + "/"
+						attr = getURLAttribution(token, puid, baseURL)
+						if attr != "" {
+							urlAttrMap[citation.Metadata.URL] = attr
+						}
+					}
+					original_response.Message.Content.Parts[0] = string(r[:citation.StartIx+offset]) + " ([" + attr + "](" + citation.Metadata.URL + " \"" + citation.Metadata.Title + "\"))" + string(r[citation.EndIx+offset:])
 					r = []rune(original_response.Message.Content.Parts[0].(string))
 					offset += len(r) - rl
 				}
