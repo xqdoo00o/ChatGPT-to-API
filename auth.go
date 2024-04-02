@@ -58,9 +58,13 @@ func AppendIfNone(slice []string, i string) []string {
 }
 
 func getSecret() (string, string) {
-	account := validAccounts[0]
-	validAccounts = append(validAccounts[1:], account)
-	return ACCESS_TOKENS.GetSecret(account)
+	if len(validAccounts) != 0 {
+		account := validAccounts[0]
+		validAccounts = append(validAccounts[1:], account)
+		return ACCESS_TOKENS.GetSecret(account)
+	} else {
+		return "", ""
+	}
 }
 
 // Read accounts.txt and create a list of accounts

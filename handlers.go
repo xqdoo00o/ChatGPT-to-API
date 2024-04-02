@@ -105,14 +105,18 @@ func nightmare(c *gin.Context) {
 	uid := uuid.NewString()
 	var chat_require *chatgpt.ChatRequire
 	var wg sync.WaitGroup
-	wg.Add(2)
+	if token == "" {
+		wg.Add(1)
+	} else {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			err = chatgpt.InitWSConn(token, uid, proxy_url)
+		}()
+	}
 	go func() {
 		defer wg.Done()
-		err = chatgpt.InitWSConn(token, uid, proxy_url)
-	}()
-	go func() {
-		defer wg.Done()
-		chat_require = chatgpt.CheckRequire(token, puid, proxy_url)
+		chat_require = chatgpt.CheckRequire(token, puid, uid, proxy_url)
 	}()
 	wg.Wait()
 	if err != nil {
@@ -126,7 +130,7 @@ func nightmare(c *gin.Context) {
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, puid, chat_require.Arkose.Required, proxy_url)
 
-	response, err := chatgpt.POSTconversation(translated_request, token, puid, chat_require.Token, proxy_url)
+	response, err := chatgpt.POSTconversation(translated_request, token, puid, uid, chat_require.Token, proxy_url)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": "error sending request",
@@ -154,7 +158,7 @@ func nightmare(c *gin.Context) {
 		if chat_require.Arkose.Required {
 			chatgpt_request_converter.RenewTokenForRequest(&translated_request, puid, proxy_url)
 		}
-		response, err = chatgpt.POSTconversation(translated_request, token, puid, chat_require.Token, proxy_url)
+		response, err = chatgpt.POSTconversation(translated_request, token, puid, uid, chat_require.Token, proxy_url)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "error sending request",

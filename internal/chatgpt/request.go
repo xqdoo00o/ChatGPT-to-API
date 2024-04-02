@@ -197,12 +197,20 @@ type ChatRequire struct {
 	} `json:"arkose"`
 }
 
-func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
+func CheckRequire(access_token string, puid string, uuid string, proxy string) *ChatRequire {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-
-	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/sentinel/chat-requirements", bytes.NewBuffer([]byte(`{"conversation_mode_kind":"primary_assistant"}`)))
+	var body *bytes.Buffer
+	var apiUrl string
+	if access_token == "" {
+		body = bytes.NewBuffer([]byte(`{}`))
+		apiUrl = "https://chat.openai.com/backend-anon/sentinel/chat-requirements"
+	} else {
+		body = bytes.NewBuffer([]byte(`{"conversation_mode_kind":"primary_assistant"}`))
+		apiUrl = "https://chat.openai.com/backend-api/sentinel/chat-requirements"
+	}
+	request, err := http.NewRequest(http.MethodPost, apiUrl, body)
 	if err != nil {
 		return nil
 	}
@@ -214,9 +222,8 @@ func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
 	request.Header.Set("Oai-Language", "en-US")
 	if access_token != "" {
 		request.Header.Set("Authorization", "Bearer "+access_token)
-	}
-	if err != nil {
-		return nil
+	} else {
+		request.Header.Set("Cookie", "oai-did="+uuid+";")
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -268,7 +275,7 @@ func getURLAttribution(access_token string, puid string, url string) string {
 	return attr.Attribution
 }
 
-func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, chat_token string, proxy string) (*http.Response, error) {
+func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, uuid string, chat_token string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -300,6 +307,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	request.Header.Set("Oai-Language", "en-US")
 	if arkoseToken != "" {
 		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
+	} else {
+		request.Header.Set("Cookie", "oai-did="+uuid+";")
 	}
 	if chat_token != "" {
 		request.Header.Set("Openai-Sentinel-Chat-Requirements-Token", chat_token)

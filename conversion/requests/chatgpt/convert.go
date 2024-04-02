@@ -12,6 +12,9 @@ import (
 func ConvertAPIRequest(api_request official_types.APIRequest, puid string, requireArk bool, proxy string) chatgpt_types.ChatGPTRequest {
 	chatgpt_request := chatgpt_types.NewChatGPTRequest()
 	var api_version int
+	if puid == "" {
+		api_request.Model = "gpt-3.5"
+	}
 	if strings.HasPrefix(api_request.Model, "gpt-3.5") {
 		api_version = 3
 		chatgpt_request.Model = "text-davinci-002-render-sha"
