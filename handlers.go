@@ -131,7 +131,7 @@ func nightmare(c *gin.Context) {
 		return
 	}
 	// Convert the chat request to a ChatGPT request
-	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, puid, chat_require.Arkose.Required, proxy_url)
+	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, puid, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
 
 	response, err := chatgpt.POSTconversation(translated_request, token, puid, chat_require.Token, proxy_url)
 	if err != nil {
@@ -159,7 +159,7 @@ func nightmare(c *gin.Context) {
 		translated_request.ConversationID = continue_info.ConversationID
 		translated_request.ParentMessageID = continue_info.ParentID
 		if chat_require.Arkose.Required {
-			chatgpt_request_converter.RenewTokenForRequest(&translated_request, puid, proxy_url)
+			chatgpt_request_converter.RenewTokenForRequest(&translated_request, puid, chat_require.Arkose.DX, proxy_url)
 		}
 		response, err = chatgpt.POSTconversation(translated_request, token, puid, chat_require.Token, proxy_url)
 		if err != nil {
