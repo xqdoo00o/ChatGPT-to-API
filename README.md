@@ -11,6 +11,8 @@ Create a fake API using ChatGPT's website
     
 ### Authentication
 
+#### After 2024-04-02, accouts.txt is optional because no need authentication for gpt-3.5.
+
 Access token and PUID(only for PLUS account) retrieval has been automated by [OpenAIAuth](https://github.com/xqdoo00o/OpenAIAuth/) with account email & password.
 
 `accounts.txt` - A list of accounts separated by new line 
