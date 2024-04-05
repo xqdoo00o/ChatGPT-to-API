@@ -25,7 +25,7 @@ email:password
 
 All authenticated access tokens and PUID will store in `access_tokens.json`
 
-Auto renew access tokens and PUID after 7 days
+Auto renew access tokens and PUID after 1 day
 
 Caution! please use unblocked ip for authentication, first login to `https://chat.openai.com/` to check ip availability if you can.
 

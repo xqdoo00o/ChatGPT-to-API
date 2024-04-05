@@ -22,7 +22,7 @@
 
 所有登录后的Access tokens和PUID会存放在`access_tokens.json`
 
-每7天自动更新Access tokens和PUID
+每天自动更新Access tokens和PUID
 
 注意！ 请使用未封锁的ip登录账号，请先打开浏览器登录`https://chat.openai.com/`以检查ip是否可用
 
