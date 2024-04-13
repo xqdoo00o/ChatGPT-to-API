@@ -1,24 +1,59 @@
 package chatgpt
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"freechatgpt/internal/tokens"
+	"image"
+	"io"
+	"mime"
+	"net/url"
 	"os"
+	"path"
+	"strconv"
+	"strings"
 
+	// 确保导入以下包以支持常见的图像格式
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
+	_ "golang.org/x/image/webp"
+
+	http "github.com/bogdanfinn/fhttp"
+
+	tls_client "github.com/bogdanfinn/tls-client"
+	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/google/uuid"
 )
 
 type chatgpt_message struct {
-	ID      uuid.UUID       `json:"id"`
-	Author  chatgpt_author  `json:"author"`
-	Content chatgpt_content `json:"content"`
+	ID       uuid.UUID         `json:"id"`
+	Author   chatgpt_author    `json:"author"`
+	Content  chatgpt_content   `json:"content"`
+	Metadata *Chatgpt_metadata `json:"metadata,omitempty"`
+}
+
+type Chatgpt_metadata struct {
+	Attachments []ImgMeta `json:"attachments,omitempty"`
 }
 
 type chatgpt_content struct {
-	ContentType string   `json:"content_type"`
-	Parts       []string `json:"parts"`
+	ContentType string        `json:"content_type"`
+	Parts       []interface{} `json:"parts"`
 }
 
 type chatgpt_author struct {
 	Role string `json:"role"`
+}
+type Image_url struct {
+	Url string `json:"url"`
+}
+type Original_multimodel struct {
+	Type  string    `json:"type"`
+	Text  string    `json:"text,omitempty"`
+	Image Image_url `json:"image_url,omitempty"`
 }
 
 type ChatGPTRequest struct {
@@ -31,7 +66,129 @@ type ChatGPTRequest struct {
 	ArkoseToken                string            `json:"arkose_token,omitempty"`
 	PluginIDs                  []string          `json:"plugin_ids,omitempty"`
 }
+type FileResp struct {
+	File_id    string `json:"file_id"`
+	Status     string `json:"status"`
+	Upload_url string `json:"upload_url"`
+}
+type UploadResp struct {
+	Status       string `json:"status"`
+	Download_url string `json:"download_url"`
+}
 
+type FileResult struct {
+	Mime     string
+	Filename string
+	Fileid   string
+	Filesize int
+	Isimage  bool
+	Bounds   image.Rectangle
+}
+
+type ImgPart struct {
+	Asset_pointer string `json:"asset_pointer"`
+	Content_type  string `json:"content_type"`
+	Size_bytes    int    `json:"size_bytes"`
+	Width         int    `json:"width,omitempty"`
+	Height        int    `json:"height,omitempty"`
+}
+
+type ImgMeta struct {
+	Id       string `json:"id"`
+	MimeType string `json:"mimeType"`
+	Name     string `json:"name"`
+	Size     int    `json:"size"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+}
+
+var (
+	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
+		tls_client.WithCookieJar(tls_client.NewCookieJar()),
+		tls_client.WithTimeoutSeconds(600),
+		tls_client.WithClientProfile(profiles.Okhttp4Android13),
+	}...)
+	userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+)
+
+func init() {
+	// from https://chromium.googlesource.com/chromium/src/+/HEAD/net/base/mime_util.cc
+	mimeMap := map[string]string{
+		"webm":                "video/webm",
+		"mp3":                 "audio/mpeg",
+		"wasm":                "application/wasm",
+		"crx":                 "application/x-chrome-extension",
+		"xhtml,xht,xhtm":      "application/xhtml+xml",
+		"flac":                "audio/flac",
+		"ogg,oga,opus":        "audio/ogg",
+		"wav":                 "audio/wav",
+		"m4a":                 "audio/x-m4a",
+		"avif":                "image/avif",
+		"gif":                 "image/gif",
+		"jpeg,jpg":            "image/jpeg",
+		"png":                 "image/png",
+		"png,apng":            "image/apng",
+		"svg,svgz":            "image/svg+xml",
+		"webp":                "image/webp",
+		"mht,mhtml":           "multipart/related",
+		"css":                 "text/css",
+		"html,htm,shtml,shtm": "text/html",
+		"js,mjs":              "text/javascript",
+		"xml":                 "text/xml",
+		"mp4,m4v":             "video/mp4",
+		"ogv,ogm":             "video/ogg",
+		"csv":                 "text/csv",
+		"ico":                 "image/x-icon",
+		"epub":                "application/epub+zip",
+		"woff":                "application/font-woff",
+		"gz,tgz":              "application/gzip",
+		"js":                  "application/javascript",
+		"json":                "application/json",
+		"doc,dot":             "application/msword",
+		"bin,exe,com":         "application/octet-stream",
+		"pdf":                 "application/pdf",
+		"p7m,p7c,p7z":         "application/pkcs7-mime",
+		"p7s":                 "application/pkcs7-signature",
+		"ps,eps,ai":           "application/postscript",
+		"rdf":                 "application/rdf+xml",
+		"rss":                 "application/rss+xml",
+		"rtf":                 "application/rtf",
+		"apk":                 "application/vnd.android.package-archive",
+		"xul":                 "application/vnd.mozilla.xul+xml",
+		"xls":                 "application/vnd.ms-excel",
+		"ppt":                 "application/vnd.ms-powerpoint",
+		"pptx":                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"xlsx":                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		"docx":                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"m3u8":                "application/x-mpegurl",
+		"swf,swl":             "application/x-shockwave-flash",
+		"tar":                 "application/x-tar",
+		"cer,crt":             "application/x-x509-ca-cert",
+		"zip":                 "application/zip",
+		"weba":                "audio/webm",
+		"bmp":                 "image/bmp",
+		"jfif,pjpeg,pjp":      "image/jpeg",
+		"tiff,tif":            "image/tiff",
+		"xbm":                 "image/x-xbitmap",
+		"eml":                 "message/rfc822",
+		"ics":                 "text/calendar",
+		"ehtml":               "text/html",
+		"txt,text":            "text/plain",
+		"sh":                  "text/x-sh",
+		"xsl,xbl,xslt":        "text/xml",
+		"mpeg,mpg":            "video/mpeg",
+	}
+	for key, item := range mimeMap {
+		keyArr := strings.Split(key, ",")
+		if len(keyArr) == 1 {
+			mime.AddExtensionType("."+key, item)
+		} else {
+			for _, ext := range keyArr {
+				mime.AddExtensionType("."+ext, item)
+			}
+		}
+	}
+}
 func NewChatGPTRequest() ChatGPTRequest {
 	disable_history := os.Getenv("ENABLE_HISTORY") != "true"
 	return ChatGPTRequest{
@@ -41,11 +198,207 @@ func NewChatGPTRequest() ChatGPTRequest {
 		HistoryAndTrainingDisabled: disable_history,
 	}
 }
+func processUrl(urlstr string, secret *tokens.Secret, proxy string) *FileResult {
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+	u, err := url.Parse(urlstr)
+	if err != nil {
+		return nil
+	}
+	fileName := path.Base(u.Path)
+	extIndex := strings.Index(fileName, ".")
+	mimeType := mime.TypeByExtension(fileName[extIndex:])
+	request, err := http.NewRequest(http.MethodGet, urlstr, nil)
+	if err != nil {
+		return nil
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	binary, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil
+	}
+	isImg := strings.HasPrefix(mimeType, "image")
+	var bounds image.Rectangle
+	if isImg {
+		img, _, _ := image.Decode(bytes.NewReader(binary))
+		if img != nil {
+			bounds = img.Bounds()
+		}
+	}
+	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, proxy)
+	if fileid == "" {
+		return nil
+	} else {
+		return &FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+	}
+}
+func processDataUrl(data string, secret *tokens.Secret, proxy string) *FileResult {
+	commaIndex := strings.Index(data, ",")
+	binary, _ := base64.StdEncoding.DecodeString(data[commaIndex+1:])
+	startIdx := strings.Index(data, ":")
+	endIdx := strings.Index(data, ";")
+	mimeType := data[startIdx+1 : endIdx]
+	var fileName string
+	extensions, _ := mime.ExtensionsByType(mimeType)
+	if len(extensions) > 0 {
+		fileName = "file" + extensions[0]
+	} else {
+		index := strings.Index(mimeType, "/")
+		fileName = "file." + mimeType[index+1:]
+	}
+	isImg := strings.HasPrefix(mimeType, "image")
+	var bounds image.Rectangle
+	if isImg {
+		img, _, _ := image.Decode(bytes.NewReader(binary))
+		if img != nil {
+			bounds = img.Bounds()
+		}
+	}
+	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, proxy)
+	if fileid == "" {
+		return nil
+	} else {
+		return &FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+	}
+}
+func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tokens.Secret, proxy string) string {
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+	var fileCase string
+	if isImg {
+		fileCase = "multimodal"
+	} else {
+		fileCase = "ace_upload"
+	}
+	dataLen := strconv.Itoa(len(data))
+	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/files", bytes.NewBuffer([]byte(`{"file_name":"`+name+`","file_size":`+dataLen+`,"use_case":"`+fileCase+`"}`)))
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
+	}
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	}
+	request.Header.Set("User-Agent", userAgent)
+	request.Header.Set("Accept", "*/*")
+	if err != nil {
+		return ""
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return ""
+	}
+	defer response.Body.Close()
+	var fileResp FileResp
+	err = json.NewDecoder(response.Body).Decode(&fileResp)
+	if err != nil {
+		return ""
+	}
+	if fileResp.Status != "success" {
+		return ""
+	}
+	request, err = http.NewRequest(http.MethodPut, fileResp.Upload_url, bytes.NewReader(data))
+	if err != nil {
+		return ""
+	}
+	request.Header.Set("X-Ms-Blob-Type", "BlockBlob")
+	request.Header.Set("X-Ms-Version", "2020-04-08")
+	response, err = client.Do(request)
+	if err != nil {
+		return ""
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 201 {
+		return ""
+	}
+	request, err = http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/files/"+fileResp.File_id+"/uploaded", bytes.NewBuffer([]byte(`{}`)))
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
+	}
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	}
+	request.Header.Set("User-Agent", userAgent)
+	request.Header.Set("Accept", "*/*")
+	if err != nil {
+		return ""
+	}
+	response, err = client.Do(request)
+	if err != nil {
+		return ""
+	}
+	defer response.Body.Close()
+	var uploadResp UploadResp
+	err = json.NewDecoder(response.Body).Decode(&uploadResp)
+	if err != nil {
+		return ""
+	}
+	return fileResp.File_id
+}
 
-func (c *ChatGPTRequest) AddMessage(role string, content string) {
-	c.Messages = append(c.Messages, chatgpt_message{
-		ID:      uuid.New(),
-		Author:  chatgpt_author{Role: role},
-		Content: chatgpt_content{ContentType: "text", Parts: []string{content}},
-	})
+func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal bool, secret *tokens.Secret, proxy string) {
+	parts := []interface{}{}
+	var result *FileResult
+	switch v := content.(type) {
+	case string:
+		parts = append(parts, v)
+	case []interface{}:
+		var items []Original_multimodel
+		for _, item := range v {
+			itemMap, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			itemtype, _ := itemMap["type"].(string)
+			if itemtype == "text" {
+				text, _ := itemMap["text"].(string)
+				items = append(items, Original_multimodel{Type: itemtype, Text: text})
+			} else {
+				imageMap, _ := itemMap["image_url"].(map[string]interface{})
+				items = append(items, Original_multimodel{Type: itemtype, Image: Image_url{Url: imageMap["url"].(string)}})
+			}
+		}
+		for _, item := range items {
+			if item.Type == "image_url" {
+				if !multimodal {
+					continue
+				}
+				data := item.Image.Url
+				if strings.HasPrefix(data, "data:") {
+					result = processDataUrl(data, secret, proxy)
+					if result == nil {
+						continue
+					}
+				} else {
+					result = processUrl(data, secret, proxy)
+					if result == nil {
+						continue
+					}
+				}
+				if result.Isimage {
+					parts = append(parts, ImgPart{Asset_pointer: "file-service://" + result.Fileid, Content_type: "image_asset_pointer", Size_bytes: result.Filesize, Width: result.Bounds.Dx(), Height: result.Bounds.Dy()})
+				}
+			} else {
+				parts = append(parts, item.Text)
+			}
+		}
+	}
+	var msg = chatgpt_message{
+		ID:       uuid.New(),
+		Author:   chatgpt_author{Role: role},
+		Content:  chatgpt_content{ContentType: "text", Parts: parts},
+		Metadata: nil,
+	}
+	if result != nil {
+		if result.Isimage {
+			msg.Content.ContentType = "multimodal_text"
+		}
+		msg.Metadata = &Chatgpt_metadata{Attachments: []ImgMeta{{Id: result.Fileid, Name: result.Filename, Size: result.Filesize, MimeType: result.Mime, Width: result.Bounds.Dx(), Height: result.Bounds.Dy()}}}
+	}
+	c.Messages = append(c.Messages, msg)
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"freechatgpt/internal/tokens"
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
@@ -205,13 +206,13 @@ type ChatRequire struct {
 	} `json:"arkose"`
 }
 
-func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
+func CheckRequire(secret *tokens.Secret, proxy string) *ChatRequire {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
 	var body *bytes.Buffer
 	var apiUrl string
-	if access_token == "" {
+	if secret.Token == "" {
 		body = bytes.NewBuffer([]byte(`{}`))
 		apiUrl = "https://chat.openai.com/backend-anon/sentinel/chat-requirements"
 	} else {
@@ -222,14 +223,14 @@ func CheckRequire(access_token string, puid string, proxy string) *ChatRequire {
 	if err != nil {
 		return nil
 	}
-	if puid != "" {
-		request.Header.Set("Cookie", "_puid="+puid+";")
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Oai-Language", "en-US")
-	if access_token != "" {
-		request.Header.Set("Authorization", "Bearer "+access_token)
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -251,19 +252,19 @@ type urlAttr struct {
 	Attribution string `json:"attribution"`
 }
 
-func getURLAttribution(access_token string, puid string, url string) string {
+func getURLAttribution(secret *tokens.Secret, url string) string {
 	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/attributions", bytes.NewBuffer([]byte(`{"urls":["`+url+`"]}`)))
 	if err != nil {
 		return ""
 	}
-	if puid != "" {
-		request.Header.Set("Cookie", "_puid="+puid+";")
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Oai-Language", "en-US")
-	if access_token != "" {
-		request.Header.Set("Authorization", "Bearer "+access_token)
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
 	}
 	if err != nil {
 		return ""
@@ -281,7 +282,7 @@ func getURLAttribution(access_token string, puid string, url string) string {
 	return attr.Attribution
 }
 
-func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string, puid string, chat_token string, proxy string) (*http.Response, error) {
+func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secret, chat_token string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -304,8 +305,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 		return &http.Response{}, err
 	}
 	// Clear cookies
-	if puid != "" {
-		request.Header.Set("Cookie", "_puid="+puid+";")
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", userAgent)
@@ -317,8 +318,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, access_token string,
 	if chat_token != "" {
 		request.Header.Set("Openai-Sentinel-Chat-Requirements-Token", chat_token)
 	}
-	if access_token != "" {
-		request.Header.Set("Authorization", "Bearer "+access_token)
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
 	}
 	if err != nil {
 		return &http.Response{}, err
@@ -366,20 +367,20 @@ type fileInfo struct {
 	Status      string `json:"status"`
 }
 
-func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string, puid string, idx int, imgSource []string) {
+func GetImageSource(wg *sync.WaitGroup, url string, prompt string, secret *tokens.Secret, idx int, imgSource []string) {
 	defer wg.Done()
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
 	// Clear cookies
-	if puid != "" {
-		request.Header.Set("Cookie", "_puid="+puid+";")
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
-	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -394,7 +395,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, token string,
 	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
 }
 
-func Handler(c *gin.Context, response *http.Response, token string, puid string, uuid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
+func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uuid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
 	max_tokens := false
 
 	// Create a bufio.Reader from the response body
@@ -426,7 +427,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
-		connInfo = findSpecConn(token, uuid)
+		connInfo = findSpecConn(secret.Token, uuid)
 		if connInfo.conn == nil {
 			c.JSON(500, gin.H{"error": "No websocket connection"})
 			return "", nil
@@ -554,7 +555,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					baseURL := u.Scheme + "://" + u.Host + "/"
 					attr := urlAttrMap[baseURL]
 					if attr == "" {
-						attr = getURLAttribution(token, puid, baseURL)
+						attr = getURLAttribution(secret, baseURL)
 						if attr != "" {
 							urlAttrMap[baseURL] = attr
 						}
@@ -586,7 +587,7 @@ func Handler(c *gin.Context, response *http.Response, token string, puid string,
 					}
 					url := apiUrl + strings.Split(dalle_content.AssetPointer, "//")[1] + "/download"
 					wg.Add(1)
-					go GetImageSource(&wg, url, dalle_content.Metadata.Dalle.Prompt, token, puid, index, imgSource)
+					go GetImageSource(&wg, url, dalle_content.Metadata.Dalle.Prompt, secret, index, imgSource)
 				}
 				wg.Wait()
 				translated_response := official_types.NewChatCompletionChunk(strings.Join(imgSource, ""))

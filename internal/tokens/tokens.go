@@ -48,13 +48,12 @@ func (a *AccessToken) Save() bool {
 	return err == nil
 }
 
-func (a *AccessToken) GetSecret(account string) (string, string) {
+func (a *AccessToken) GetSecret(account string) Secret {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
 	if len(a.tokens) == 0 {
-		return "", ""
+		return Secret{}
 	}
-	secret := a.tokens[account]
-	return secret.Token, secret.PUID
+	return a.tokens[account]
 }

@@ -57,13 +57,13 @@ func AppendIfNone(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func getSecret() (string, string) {
+func getSecret() tokens.Secret {
 	if len(validAccounts) != 0 {
 		account := validAccounts[0]
 		validAccounts = append(validAccounts[1:], account)
 		return ACCESS_TOKENS.GetSecret(account)
 	} else {
-		return "", ""
+		return tokens.Secret{}
 	}
 }
 
@@ -79,6 +79,9 @@ func readAccounts() {
 		for scanner.Scan() {
 			// Split by :
 			line := strings.Split(scanner.Text(), ":")
+			if len(line) < 2 {
+				continue
+			}
 			// Create an account
 			account := Account{
 				Email:    line[0],
@@ -145,7 +148,7 @@ func scheduleTokenPUID() {
 						}
 					}
 				tokenProcess:
-					token, _ = ACCESS_TOKENS.GetSecret(account.Email)
+					token = ACCESS_TOKENS.GetSecret(account.Email).Token
 					expireTime, err := getTokenExpire(token)
 					nowTime := time.Now()
 					if err != nil {
