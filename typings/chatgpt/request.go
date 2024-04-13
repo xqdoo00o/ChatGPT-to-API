@@ -2,6 +2,7 @@ package chatgpt
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
 	"freechatgpt/internal/tokens"
@@ -108,7 +109,8 @@ var (
 		tls_client.WithTimeoutSeconds(600),
 		tls_client.WithClientProfile(profiles.Okhttp4Android13),
 	}...)
-	userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	userAgent    = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	fileHashPool = map[string]*FileResult{}
 )
 
 func init() {
@@ -222,6 +224,12 @@ func processUrl(urlstr string, secret *tokens.Secret, proxy string) *FileResult 
 	if err != nil {
 		return nil
 	}
+	hasher := sha1.New()
+	hasher.Write(binary)
+	hash := string(hasher.Sum(nil))
+	if fileHashPool[hash] != nil {
+		return fileHashPool[hash]
+	}
 	isImg := strings.HasPrefix(mimeType, "image")
 	var bounds image.Rectangle
 	if isImg {
@@ -234,12 +242,23 @@ func processUrl(urlstr string, secret *tokens.Secret, proxy string) *FileResult 
 	if fileid == "" {
 		return nil
 	} else {
-		return &FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+		result := FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+		fileHashPool[hash] = &result
+		return &result
 	}
 }
 func processDataUrl(data string, secret *tokens.Secret, proxy string) *FileResult {
 	commaIndex := strings.Index(data, ",")
-	binary, _ := base64.StdEncoding.DecodeString(data[commaIndex+1:])
+	binary, err := base64.StdEncoding.DecodeString(data[commaIndex+1:])
+	if err != nil {
+		return nil
+	}
+	hasher := sha1.New()
+	hasher.Write(binary)
+	hash := string(hasher.Sum(nil))
+	if fileHashPool[hash] != nil {
+		return fileHashPool[hash]
+	}
 	startIdx := strings.Index(data, ":")
 	endIdx := strings.Index(data, ";")
 	mimeType := data[startIdx+1 : endIdx]
@@ -263,7 +282,9 @@ func processDataUrl(data string, secret *tokens.Secret, proxy string) *FileResul
 	if fileid == "" {
 		return nil
 	} else {
-		return &FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+		result := FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+		fileHashPool[hash] = &result
+		return &result
 	}
 }
 func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tokens.Secret, proxy string) string {
