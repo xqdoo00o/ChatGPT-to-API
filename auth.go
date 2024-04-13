@@ -57,13 +57,13 @@ func AppendIfNone(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func getSecret() tokens.Secret {
+func getSecret() (string, tokens.Secret) {
 	if len(validAccounts) != 0 {
 		account := validAccounts[0]
 		validAccounts = append(validAccounts[1:], account)
-		return ACCESS_TOKENS.GetSecret(account)
+		return account, ACCESS_TOKENS.GetSecret(account)
 	} else {
-		return tokens.Secret{}
+		return "", tokens.Secret{}
 	}
 }
 

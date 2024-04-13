@@ -86,7 +86,7 @@ func nightmare(c *gin.Context) {
 	}
 
 	authHeader := c.GetHeader("Authorization")
-	secret := getSecret()
+	account, secret := getSecret()
 	if authHeader != "" {
 		customAccessToken := strings.Replace(authHeader, "Bearer ", "", 1)
 		// Check if customAccessToken starts with sk-
@@ -131,7 +131,7 @@ func nightmare(c *gin.Context) {
 		return
 	}
 	// Convert the chat request to a ChatGPT request
-	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, &secret, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
+	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
 
 	response, err := chatgpt.POSTconversation(translated_request, &secret, chat_require.Token, proxy_url)
 	if err != nil {

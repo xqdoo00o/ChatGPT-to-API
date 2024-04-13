@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"freechatgpt/internal/tokens"
 	"image"
@@ -200,7 +201,7 @@ func NewChatGPTRequest() ChatGPTRequest {
 		HistoryAndTrainingDisabled: disable_history,
 	}
 }
-func processUrl(urlstr string, secret *tokens.Secret, proxy string) *FileResult {
+func processUrl(urlstr string, account string, secret *tokens.Secret, proxy string) *FileResult {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -226,7 +227,7 @@ func processUrl(urlstr string, secret *tokens.Secret, proxy string) *FileResult 
 	}
 	hasher := sha1.New()
 	hasher.Write(binary)
-	hash := string(hasher.Sum(nil))
+	hash := account + hex.EncodeToString(hasher.Sum(nil))
 	if fileHashPool[hash] != nil {
 		return fileHashPool[hash]
 	}
@@ -247,7 +248,7 @@ func processUrl(urlstr string, secret *tokens.Secret, proxy string) *FileResult 
 		return &result
 	}
 }
-func processDataUrl(data string, secret *tokens.Secret, proxy string) *FileResult {
+func processDataUrl(data string, account string, secret *tokens.Secret, proxy string) *FileResult {
 	commaIndex := strings.Index(data, ",")
 	binary, err := base64.StdEncoding.DecodeString(data[commaIndex+1:])
 	if err != nil {
@@ -255,7 +256,7 @@ func processDataUrl(data string, secret *tokens.Secret, proxy string) *FileResul
 	}
 	hasher := sha1.New()
 	hasher.Write(binary)
-	hash := string(hasher.Sum(nil))
+	hash := account + hex.EncodeToString(hasher.Sum(nil))
 	if fileHashPool[hash] != nil {
 		return fileHashPool[hash]
 	}
@@ -362,7 +363,7 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	return fileResp.File_id
 }
 
-func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal bool, secret *tokens.Secret, proxy string) {
+func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal bool, account string, secret *tokens.Secret, proxy string) {
 	parts := []interface{}{}
 	var result *FileResult
 	switch v := content.(type) {
@@ -391,12 +392,12 @@ func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal
 				}
 				data := item.Image.Url
 				if strings.HasPrefix(data, "data:") {
-					result = processDataUrl(data, secret, proxy)
+					result = processDataUrl(data, account, secret, proxy)
 					if result == nil {
 						continue
 					}
 				} else {
-					result = processUrl(data, secret, proxy)
+					result = processUrl(data, account, secret, proxy)
 					if result == nil {
 						continue
 					}
