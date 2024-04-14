@@ -413,7 +413,6 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 	var previous_text typings.StringStruct
 	var original_response chatgpt_types.ChatGPTResponse
 	var isRole = true
-	var waitSource = false
 	var isEnd = false
 	var imgSource []string
 	var isWSS = false
@@ -527,27 +526,17 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 			if !(original_response.Message.Author.Role == "assistant" || (original_response.Message.Author.Role == "tool" && original_response.Message.Content.ContentType != "text")) || original_response.Message.Content.Parts == nil {
 				continue
 			}
-			if original_response.Message.Metadata.MessageType == "" {
+			if original_response.Message.Metadata.MessageType == "" || original_response.Message.Recipient != "all" {
 				continue
 			}
 			if original_response.Message.Metadata.MessageType != "next" && original_response.Message.Metadata.MessageType != "continue" || !strings.HasSuffix(original_response.Message.Content.ContentType, "text") {
 				continue
 			}
 			if original_response.Message.EndTurn != nil {
-				if waitSource {
-					waitSource = false
-				}
 				isEnd = true
 			}
 			if len(original_response.Message.Metadata.Citations) != 0 {
 				r := []rune(original_response.Message.Content.Parts[0].(string))
-				if waitSource {
-					if string(r[len(r)-1:]) == "】" {
-						waitSource = false
-					} else {
-						continue
-					}
-				}
 				offset := 0
 				for _, citation := range original_response.Message.Metadata.Citations {
 					rl := len(r)
@@ -564,13 +553,8 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 					r = []rune(original_response.Message.Content.Parts[0].(string))
 					offset += len(r) - rl
 				}
-			} else if waitSource {
-				continue
 			}
 			response_string := ""
-			if original_response.Message.Recipient != "all" {
-				continue
-			}
 			if original_response.Message.Content.ContentType == "multimodal_text" {
 				apiUrl := "https://chat.openai.com/backend-api/files/"
 				if FILES_REVERSE_PROXY != "" {
@@ -605,10 +589,6 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 				} else {
 					continue
 				}
-			}
-			if response_string == "【" {
-				waitSource = true
-				continue
 			}
 			isRole = false
 			if stream {
