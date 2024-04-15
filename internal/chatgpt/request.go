@@ -508,6 +508,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 		// Check if line starts with [DONE]
 		if !strings.HasPrefix(line, "[DONE]") {
 			// Parse the line as JSON
+			original_response.Message.ID = ""
 			err = json.Unmarshal([]byte(line), &original_response)
 			if err != nil {
 				continue
@@ -552,7 +553,8 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 							urlAttrMap[baseURL] = attr
 						}
 					}
-					original_response.Message.Content.Parts[0] = string(r[:citation.StartIx+offset]) + " ([" + attr + "](" + citation.Metadata.URL + " \"" + citation.Metadata.Title + "\"))" + string(r[citation.EndIx+offset:])
+					u.Fragment = ""
+					original_response.Message.Content.Parts[0] = string(r[:citation.StartIx+offset]) + " ([" + attr + "](" + u.String() + " \"" + citation.Metadata.Title + "\"))" + string(r[citation.EndIx+offset:])
 					r = []rune(original_response.Message.Content.Parts[0].(string))
 					offset += len(r) - rl
 				}
