@@ -579,7 +579,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 					go GetImageSource(&wg, url, dalle_content.Metadata.Dalle.Prompt, secret, index, imgSource)
 				}
 				wg.Wait()
-				translated_response := official_types.NewChatCompletionChunk(strings.Join(imgSource, ""))
+				translated_response := official_types.NewChatCompletionChunk(strings.Join(imgSource, "") + "\n")
 				if isRole {
 					translated_response.Choices[0].Delta.Role = original_response.Message.Author.Role
 				}
@@ -622,9 +622,9 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 		}
 	}
 	if !max_tokens {
-		return strings.Join(imgSource, "") + previous_text.Text, nil
+		return strings.Join(imgSource, "") + "\n" + previous_text.Text, nil
 	}
-	return strings.Join(imgSource, "") + previous_text.Text, &ContinueInfo{
+	return strings.Join(imgSource, "") + "\n" + previous_text.Text, &ContinueInfo{
 		ConversationID: original_response.ConversationID,
 		ParentID:       original_response.Message.ID,
 	}
