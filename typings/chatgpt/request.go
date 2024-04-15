@@ -84,7 +84,7 @@ type FileResult struct {
 	Fileid   string
 	Filesize int
 	Isimage  bool
-	Bounds   image.Rectangle
+	Bounds   [2]int
 }
 
 type ImgPart struct {
@@ -191,6 +191,29 @@ func init() {
 			}
 		}
 	}
+	file, err := os.Open("fileHashes.json")
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	err = json.NewDecoder(file).Decode(&fileHashPool)
+	if err != nil {
+		return
+	}
+}
+func SaveFileHash() {
+	if len(fileHashPool) == 0 {
+		return
+	}
+	file, err := os.OpenFile("fileHashes.json", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	err = json.NewEncoder(file).Encode(fileHashPool)
+	if err != nil {
+		return
+	}
 }
 func NewChatGPTRequest() ChatGPTRequest {
 	disable_history := os.Getenv("ENABLE_HISTORY") != "true"
@@ -232,11 +255,12 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, proxy stri
 		return fileHashPool[hash]
 	}
 	isImg := strings.HasPrefix(mimeType, "image")
-	var bounds image.Rectangle
+	var bounds [2]int
 	if isImg {
 		img, _, _ := image.Decode(bytes.NewReader(binary))
 		if img != nil {
-			bounds = img.Bounds()
+			bounds[0] = img.Bounds().Dx()
+			bounds[1] = img.Bounds().Dy()
 		}
 	}
 	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, proxy)
@@ -272,11 +296,12 @@ func processDataUrl(data string, account string, secret *tokens.Secret, proxy st
 		fileName = "file." + mimeType[index+1:]
 	}
 	isImg := strings.HasPrefix(mimeType, "image")
-	var bounds image.Rectangle
+	var bounds [2]int
 	if isImg {
 		img, _, _ := image.Decode(bytes.NewReader(binary))
 		if img != nil {
-			bounds = img.Bounds()
+			bounds[0] = img.Bounds().Dx()
+			bounds[1] = img.Bounds().Dy()
 		}
 	}
 	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, proxy)
@@ -403,7 +428,7 @@ func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal
 					}
 				}
 				if result.Isimage {
-					parts = append(parts, ImgPart{Asset_pointer: "file-service://" + result.Fileid, Content_type: "image_asset_pointer", Size_bytes: result.Filesize, Width: result.Bounds.Dx(), Height: result.Bounds.Dy()})
+					parts = append(parts, ImgPart{Asset_pointer: "file-service://" + result.Fileid, Content_type: "image_asset_pointer", Size_bytes: result.Filesize, Width: result.Bounds[0], Height: result.Bounds[1]})
 				}
 			} else {
 				parts = append(parts, item.Text)
@@ -420,7 +445,7 @@ func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal
 		if result.Isimage {
 			msg.Content.ContentType = "multimodal_text"
 		}
-		msg.Metadata = &Chatgpt_metadata{Attachments: []ImgMeta{{Id: result.Fileid, Name: result.Filename, Size: result.Filesize, MimeType: result.Mime, Width: result.Bounds.Dx(), Height: result.Bounds.Dy()}}}
+		msg.Metadata = &Chatgpt_metadata{Attachments: []ImgMeta{{Id: result.Fileid, Name: result.Filename, Size: result.Filesize, MimeType: result.Mime, Width: result.Bounds[0], Height: result.Bounds[1]}}}
 	}
 	c.Messages = append(c.Messages, msg)
 }

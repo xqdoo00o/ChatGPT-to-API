@@ -516,6 +516,9 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, uui
 				c.JSON(500, gin.H{"error": original_response.Error})
 				return "", nil
 			}
+			if original_response.Message.ID == "" {
+				continue
+			}
 			if original_response.ConversationID != convId {
 				if convId == "" {
 					convId = original_response.ConversationID
