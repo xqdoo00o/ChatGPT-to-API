@@ -15,6 +15,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	// 确保导入以下包以支持常见的图像格式
 	_ "image/gif"
@@ -85,6 +86,8 @@ type FileResult struct {
 	Filesize int
 	Isimage  bool
 	Bounds   [2]int
+	// Current file max-age 1 year
+	Upload int64
 }
 
 type ImgPart struct {
@@ -251,7 +254,7 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId s
 	hasher := sha1.New()
 	hasher.Write(binary)
 	hash := account + hex.EncodeToString(hasher.Sum(nil))
-	if fileHashPool[hash] != nil {
+	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+31536000 {
 		return fileHashPool[hash]
 	}
 	isImg := strings.HasPrefix(mimeType, "image")
@@ -267,7 +270,7 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId s
 	if fileid == "" {
 		return nil
 	} else {
-		result := FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+		result := FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds, Upload: time.Now().Unix()}
 		fileHashPool[hash] = &result
 		return &result
 	}
@@ -281,7 +284,7 @@ func processDataUrl(data string, account string, secret *tokens.Secret, deviceId
 	hasher := sha1.New()
 	hasher.Write(binary)
 	hash := account + hex.EncodeToString(hasher.Sum(nil))
-	if fileHashPool[hash] != nil {
+	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+31536000 {
 		return fileHashPool[hash]
 	}
 	startIdx := strings.Index(data, ":")
@@ -308,7 +311,7 @@ func processDataUrl(data string, account string, secret *tokens.Secret, deviceId
 	if fileid == "" {
 		return nil
 	} else {
-		result := FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds}
+		result := FileResult{Mime: mimeType, Filename: fileName, Filesize: len(binary), Fileid: fileid, Isimage: isImg, Bounds: bounds, Upload: time.Now().Unix()}
 		fileHashPool[hash] = &result
 		return &result
 	}
