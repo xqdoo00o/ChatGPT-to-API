@@ -13,6 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	uuidNamespace = uuid.MustParse("12345678-1234-5678-1234-567812345678")
+)
+
 func passwordHandler(c *gin.Context) {
 	// Get the password from the request (json) and update the password
 	type password_struct struct {
@@ -72,6 +76,10 @@ func simulateModel(c *gin.Context) {
 		},
 	})
 }
+
+func generateUUID(name string) string {
+	return uuid.NewSHA1(uuidNamespace, []byte(name)).String()
+}
 func nightmare(c *gin.Context) {
 	var original_request official_types.APIRequest
 	err := c.BindJSON(&original_request)
@@ -103,8 +111,13 @@ func nightmare(c *gin.Context) {
 		proxies = append(proxies[1:], proxies[0])
 	}
 	uid := uuid.NewString()
-	if secret.Token == "" {
+	var deviceId string
+	if account == "" {
+		deviceId = uid
 		chatgpt.SetOAICookie(uid)
+	} else {
+		deviceId = generateUUID(account)
+		chatgpt.SetOAICookie(deviceId)
 	}
 	var chat_require *chatgpt.ChatRequire
 	var wg sync.WaitGroup
@@ -114,12 +127,12 @@ func nightmare(c *gin.Context) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			err = chatgpt.InitWSConn(secret.Token, uid, proxy_url)
+			err = chatgpt.InitWSConn(secret.Token, deviceId, uid, proxy_url)
 		}()
 	}
 	go func() {
 		defer wg.Done()
-		chat_require = chatgpt.CheckRequire(&secret, proxy_url)
+		chat_require = chatgpt.CheckRequire(&secret, deviceId, proxy_url)
 	}()
 	wg.Wait()
 	if err != nil {
@@ -131,9 +144,9 @@ func nightmare(c *gin.Context) {
 		return
 	}
 	// Convert the chat request to a ChatGPT request
-	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
+	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, deviceId, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
 
-	response, err := chatgpt.POSTconversation(translated_request, &secret, chat_require.Token, proxy_url)
+	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proxy_url)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": "error sending request",
@@ -148,7 +161,7 @@ func nightmare(c *gin.Context) {
 	for i := 3; i > 0; i-- {
 		var continue_info *chatgpt.ContinueInfo
 		var response_part string
-		response_part, continue_info = chatgpt.Handler(c, response, &secret, uid, translated_request, original_request.Stream)
+		response_part, continue_info = chatgpt.Handler(c, response, &secret, deviceId, uid, translated_request, original_request.Stream)
 		full_response += response_part
 		if continue_info == nil {
 			break
@@ -161,7 +174,7 @@ func nightmare(c *gin.Context) {
 		if chat_require.Arkose.Required {
 			chatgpt_request_converter.RenewTokenForRequest(&translated_request, secret.PUID, chat_require.Arkose.DX, proxy_url)
 		}
-		response, err = chatgpt.POSTconversation(translated_request, &secret, chat_require.Token, proxy_url)
+		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proxy_url)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "error sending request",

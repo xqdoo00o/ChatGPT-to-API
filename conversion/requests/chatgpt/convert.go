@@ -10,7 +10,7 @@ import (
 	arkose "github.com/xqdoo00o/funcaptcha"
 )
 
-func ConvertAPIRequest(api_request official_types.APIRequest, account string, secret *tokens.Secret, requireArk bool, dx string, proxy string) chatgpt_types.ChatGPTRequest {
+func ConvertAPIRequest(api_request official_types.APIRequest, account string, secret *tokens.Secret, deviceId string, requireArk bool, dx string, proxy string) chatgpt_types.ChatGPTRequest {
 	chatgpt_request := chatgpt_types.NewChatGPTRequest()
 	var api_version int
 	if secret.PUID == "" {
@@ -40,7 +40,7 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 		if api_message.Role == "system" {
 			api_message.Role = "critic"
 		}
-		chatgpt_request.AddMessage(api_message.Role, api_message.Content, ifMultimodel, account, secret, proxy)
+		chatgpt_request.AddMessage(api_message.Role, api_message.Content, ifMultimodel, account, secret, deviceId, proxy)
 	}
 	return chatgpt_request
 }

@@ -224,7 +224,7 @@ func NewChatGPTRequest() ChatGPTRequest {
 		HistoryAndTrainingDisabled: disable_history,
 	}
 }
-func processUrl(urlstr string, account string, secret *tokens.Secret, proxy string) *FileResult {
+func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId string, proxy string) *FileResult {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -263,7 +263,7 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, proxy stri
 			bounds[1] = img.Bounds().Dy()
 		}
 	}
-	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, proxy)
+	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, deviceId, proxy)
 	if fileid == "" {
 		return nil
 	} else {
@@ -272,7 +272,7 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, proxy stri
 		return &result
 	}
 }
-func processDataUrl(data string, account string, secret *tokens.Secret, proxy string) *FileResult {
+func processDataUrl(data string, account string, secret *tokens.Secret, deviceId string, proxy string) *FileResult {
 	commaIndex := strings.Index(data, ",")
 	binary, err := base64.StdEncoding.DecodeString(data[commaIndex+1:])
 	if err != nil {
@@ -304,7 +304,7 @@ func processDataUrl(data string, account string, secret *tokens.Secret, proxy st
 			bounds[1] = img.Bounds().Dy()
 		}
 	}
-	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, proxy)
+	fileid := uploadBinary(binary, mimeType, fileName, isImg, secret, deviceId, proxy)
 	if fileid == "" {
 		return nil
 	} else {
@@ -313,7 +313,7 @@ func processDataUrl(data string, account string, secret *tokens.Secret, proxy st
 		return &result
 	}
 }
-func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tokens.Secret, proxy string) string {
+func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tokens.Secret, deviceId string, proxy string) string {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -333,6 +333,8 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Oai-Device-Id", deviceId)
+	request.Header.Set("Oai-Language", "en-US")
 	if err != nil {
 		return ""
 	}
@@ -372,6 +374,8 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Oai-Device-Id", deviceId)
+	request.Header.Set("Oai-Language", "en-US")
 	if err != nil {
 		return ""
 	}
@@ -388,7 +392,7 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	return fileResp.File_id
 }
 
-func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal bool, account string, secret *tokens.Secret, proxy string) {
+func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal bool, account string, secret *tokens.Secret, deviceId string, proxy string) {
 	parts := []interface{}{}
 	var result *FileResult
 	switch v := content.(type) {
@@ -417,12 +421,12 @@ func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal
 				}
 				data := item.Image.Url
 				if strings.HasPrefix(data, "data:") {
-					result = processDataUrl(data, account, secret, proxy)
+					result = processDataUrl(data, account, secret, deviceId, proxy)
 					if result == nil {
 						continue
 					}
 				} else {
-					result = processUrl(data, account, secret, proxy)
+					result = processUrl(data, account, secret, deviceId, proxy)
 					if result == nil {
 						continue
 					}
