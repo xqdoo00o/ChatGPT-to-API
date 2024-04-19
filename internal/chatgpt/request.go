@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"freechatgpt/internal/tokens"
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
+	"math/rand"
 	"net/url"
 	"os"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/sha3"
 
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
@@ -47,6 +50,11 @@ var (
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string][]*connInfo{}
 	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	answers             = map[string]string{}
+	cores               = []int{8, 12, 16, 24}
+	screens             = []int{3000, 4000, 6000}
+	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
+	timeLayout          = "Mon Jan 2 2006 15:04:05"
 )
 
 func getWSURL(token string, deviceId string, retry int) (string, error) {
@@ -199,8 +207,51 @@ func SetOAICookie(uuid string) {
 	}})
 }
 
+type ProofWork struct {
+	Difficulty string `json:"difficulty,omitempty"`
+	Required   bool   `json:"required"`
+	Seed       string `json:"seed,omitempty"`
+}
+
+func getParseTime() string {
+	now := time.Now()
+	now = now.In(timeLocation)
+	return now.Format(timeLayout) + " GMT+0800 (中国标准时间)"
+}
+func getConfig() []interface{} {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	core := cores[rand.Intn(4)]
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	screen := screens[rand.Intn(3)]
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	return []interface{}{core + screen, getParseTime(), 4295000000 + rand.Intn(2000001) - 1000000, 0, userAgent}
+
+}
+func CalcProofToken(seed string, diff string) string {
+	if answers[seed] != "" {
+		return answers[seed]
+	}
+	config := getConfig()
+	diffLen := len(diff) / 2
+	hasher := sha3.New512()
+	for i := 0; i < 100000; i++ {
+		config[3] = i
+		json, _ := json.Marshal(config)
+		base := base64.StdEncoding.EncodeToString(json)
+		hasher.Write([]byte(seed + base))
+		hash := hasher.Sum(nil)
+		hasher.Reset()
+		if hex.EncodeToString(hash[:diffLen]) <= diff {
+			answers[seed] = "gAAAAAB" + base
+			return answers[seed]
+		}
+	}
+	return "gAAAAABwQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
+}
+
 type ChatRequire struct {
-	Token  string `json:"token"`
+	Token  string    `json:"token"`
+	Proof  ProofWork `json:"proofofwork,omitempty"`
 	Arkose struct {
 		Required bool   `json:"required"`
 		DX       string `json:"dx,omitempty"`
@@ -285,7 +336,7 @@ func getURLAttribution(secret *tokens.Secret, deviceId string, url string) strin
 	return attr.Attribution
 }
 
-func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secret, deviceId string, chat_token string, proxy string) (*http.Response, error) {
+func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secret, deviceId string, chat_token string, proofToken string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -321,6 +372,9 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 	}
 	if chat_token != "" {
 		request.Header.Set("Openai-Sentinel-Chat-Requirements-Token", chat_token)
+	}
+	if proofToken != "" {
+		request.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
 	if secret.Token != "" {
 		request.Header.Set("Authorization", "Bearer "+secret.Token)

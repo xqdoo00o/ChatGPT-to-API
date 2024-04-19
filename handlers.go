@@ -143,10 +143,15 @@ func nightmare(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "unable to check chat requirement"})
 		return
 	}
+	var proofToken string
+	// current proof not necessary...
+	if false && chat_require.Proof.Required {
+		proofToken = chatgpt.CalcProofToken(chat_require.Proof.Seed, chat_require.Proof.Difficulty)
+	}
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, deviceId, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
 
-	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proxy_url)
+	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proofToken, proxy_url)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": "error sending request",
@@ -174,7 +179,7 @@ func nightmare(c *gin.Context) {
 		if chat_require.Arkose.Required {
 			chatgpt_request_converter.RenewTokenForRequest(&translated_request, secret.PUID, chat_require.Arkose.DX, proxy_url)
 		}
-		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proxy_url)
+		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proofToken, proxy_url)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "error sending request",
