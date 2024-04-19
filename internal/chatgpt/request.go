@@ -223,8 +223,7 @@ func getConfig() []interface{} {
 	core := cores[rand.Intn(4)]
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	screen := screens[rand.Intn(3)]
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-	return []interface{}{core + screen, getParseTime(), 4295000000 + rand.Intn(2000001) - 1000000, 0, userAgent}
+	return []interface{}{core + screen, getParseTime(), int64(4294705152), 0, userAgent}
 
 }
 func CalcProofToken(seed string, diff string) string {
