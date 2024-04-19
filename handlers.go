@@ -144,8 +144,7 @@ func nightmare(c *gin.Context) {
 		return
 	}
 	var proofToken string
-	// current proof not necessary...
-	if false && chat_require.Proof.Required {
+	if chat_require.Proof.Required {
 		proofToken = chatgpt.CalcProofToken(chat_require.Proof.Seed, chat_require.Proof.Difficulty)
 	}
 	// Convert the chat request to a ChatGPT request
