@@ -357,15 +357,20 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 	if err != nil {
 		return &http.Response{}, err
 	}
-	// Clear cookies
-	if secret.PUID != "" {
-		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
-	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "text/event-stream")
 	request.Header.Set("Oai-Device-Id", deviceId)
 	request.Header.Set("Oai-Language", "en-US")
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	}
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
+	}
+	if secret.TeamUserID != "" {
+		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
+	}
 	if arkoseToken != "" {
 		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
 	}
@@ -374,9 +379,6 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 	}
 	if proofToken != "" {
 		request.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
-	}
-	if secret.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+secret.Token)
 	}
 	if err != nil {
 		return &http.Response{}, err
