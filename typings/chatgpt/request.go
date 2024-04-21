@@ -232,6 +232,28 @@ func NewChatGPTRequest() ChatGPTRequest {
 		ConversationMode:           ChatGPTConvMode{Kind: "primary_assistant"},
 	}
 }
+
+func newRequest(method string, url string, body io.Reader, secret *tokens.Secret, deviceId string) (*http.Request, error) {
+	request, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return &http.Request{}, err
+	}
+	request.Header.Set("User-Agent", userAgent)
+	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Oai-Device-Id", deviceId)
+	request.Header.Set("Oai-Language", "en-US")
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	}
+	if secret.PUID != "" {
+		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
+	}
+	if secret.TeamUserID != "" {
+		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
+	}
+	return request, nil
+}
+
 func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId string, proxy string) *FileResult {
 	if proxy != "" {
 		client.SetProxy(proxy)
@@ -332,20 +354,7 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 		fileCase = "ace_upload"
 	}
 	dataLen := strconv.Itoa(len(data))
-	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/files", bytes.NewBuffer([]byte(`{"file_name":"`+name+`","file_size":`+dataLen+`,"use_case":"`+fileCase+`"}`)))
-	if secret.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+secret.Token)
-	}
-	if secret.PUID != "" {
-		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
-	}
-	if secret.TeamUserID != "" {
-		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
-	}
-	request.Header.Set("User-Agent", userAgent)
-	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Oai-Device-Id", deviceId)
-	request.Header.Set("Oai-Language", "en-US")
+	request, err := newRequest(http.MethodPost, "https://chat.openai.com/backend-api/files", bytes.NewBuffer([]byte(`{"file_name":"`+name+`","file_size":`+dataLen+`,"use_case":"`+fileCase+`"}`)), secret, deviceId)
 	if err != nil {
 		return ""
 	}
@@ -376,20 +385,7 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	if response.StatusCode != 201 {
 		return ""
 	}
-	request, err = http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/files/"+fileResp.File_id+"/uploaded", bytes.NewBuffer([]byte(`{}`)))
-	if secret.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+secret.Token)
-	}
-	if secret.PUID != "" {
-		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
-	}
-	if secret.TeamUserID != "" {
-		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
-	}
-	request.Header.Set("User-Agent", userAgent)
-	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Oai-Device-Id", deviceId)
-	request.Header.Set("Oai-Language", "en-US")
+	request, err = newRequest(http.MethodPost, "https://chat.openai.com/backend-api/files/"+fileResp.File_id+"/uploaded", bytes.NewBuffer([]byte(`{}`)), secret, deviceId)
 	if err != nil {
 		return ""
 	}
