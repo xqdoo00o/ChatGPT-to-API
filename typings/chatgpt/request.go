@@ -59,15 +59,19 @@ type Original_multimodel struct {
 	Image Image_url `json:"image_url,omitempty"`
 }
 
+type ChatGPTConvMode struct {
+	Kind    string `json:"kind"`
+	GizmoId string `json:"gizmo_id,omitempty"`
+}
 type ChatGPTRequest struct {
 	Action                     string            `json:"action"`
+	ConversationMode           ChatGPTConvMode   `json:"conversation_mode"`
 	Messages                   []chatgpt_message `json:"messages,omitempty"`
 	ParentMessageID            string            `json:"parent_message_id,omitempty"`
 	ConversationID             string            `json:"conversation_id,omitempty"`
 	Model                      string            `json:"model"`
 	HistoryAndTrainingDisabled bool              `json:"history_and_training_disabled"`
 	ArkoseToken                string            `json:"arkose_token,omitempty"`
-	PluginIDs                  []string          `json:"plugin_ids,omitempty"`
 }
 type FileResp struct {
 	File_id    string `json:"file_id"`
@@ -225,6 +229,7 @@ func NewChatGPTRequest() ChatGPTRequest {
 		ParentMessageID:            uuid.NewString(),
 		Model:                      "text-davinci-002-render-sha",
 		HistoryAndTrainingDisabled: disable_history,
+		ConversationMode:           ChatGPTConvMode{Kind: "primary_assistant"},
 	}
 }
 func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId string, proxy string) *FileResult {
@@ -253,7 +258,7 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId s
 	}
 	hasher := sha1.New()
 	hasher.Write(binary)
-	hash := account + hex.EncodeToString(hasher.Sum(nil))
+	hash := account + secret.TeamUserID + hex.EncodeToString(hasher.Sum(nil))
 	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+31536000 {
 		return fileHashPool[hash]
 	}
@@ -283,7 +288,7 @@ func processDataUrl(data string, account string, secret *tokens.Secret, deviceId
 	}
 	hasher := sha1.New()
 	hasher.Write(binary)
-	hash := account + hex.EncodeToString(hasher.Sum(nil))
+	hash := account + secret.TeamUserID + hex.EncodeToString(hasher.Sum(nil))
 	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+31536000 {
 		return fileHashPool[hash]
 	}
@@ -328,11 +333,14 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	}
 	dataLen := strconv.Itoa(len(data))
 	request, err := http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/files", bytes.NewBuffer([]byte(`{"file_name":"`+name+`","file_size":`+dataLen+`,"use_case":"`+fileCase+`"}`)))
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	}
 	if secret.PUID != "" {
 		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
 	}
-	if secret.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	if secret.TeamUserID != "" {
+		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
@@ -369,11 +377,14 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 		return ""
 	}
 	request, err = http.NewRequest(http.MethodPost, "https://chat.openai.com/backend-api/files/"+fileResp.File_id+"/uploaded", bytes.NewBuffer([]byte(`{}`)))
+	if secret.Token != "" {
+		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	}
 	if secret.PUID != "" {
 		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
 	}
-	if secret.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+secret.Token)
+	if secret.TeamUserID != "" {
+		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")

@@ -127,7 +127,7 @@ func nightmare(c *gin.Context) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			err = chatgpt.InitWSConn(secret.Token, deviceId, uid, proxy_url)
+			err = chatgpt.InitWSConn(&secret, deviceId, uid, proxy_url)
 		}()
 	}
 	go func() {

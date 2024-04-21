@@ -22,6 +22,14 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 	} else if strings.HasPrefix(api_request.Model, "gpt-4") {
 		api_version = 4
 		chatgpt_request.Model = "gpt-4"
+		if len(api_request.Model) > 12 {
+			key := api_request.Model[6:11]
+			if key == "gizmo" {
+				val := api_request.Model[12:]
+				chatgpt_request.ConversationMode.Kind = "gizmo_interaction"
+				chatgpt_request.ConversationMode.GizmoId = val
+			}
+		}
 	}
 	if requireArk {
 		token, err := arkose.GetOpenAIToken(api_version, secret.PUID, dx, proxy)
@@ -30,10 +38,6 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 		} else {
 			fmt.Println("Error getting Arkose token: ", err)
 		}
-	}
-	if api_request.PluginIDs != nil {
-		chatgpt_request.PluginIDs = api_request.PluginIDs
-		chatgpt_request.Model = "gpt-4-plugins"
 	}
 	ifMultimodel := api_version == 4
 	for _, api_message := range api_request.Messages {
