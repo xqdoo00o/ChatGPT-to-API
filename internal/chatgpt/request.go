@@ -24,6 +24,7 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/sha3"
 
+	"github.com/PuerkitoBio/goquery"
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
@@ -57,6 +58,8 @@ var (
 	screens             = []int{3000, 4000, 6000}
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
+	cachedScripts       = []string{}
+	cachedDpl           = ""
 )
 
 func newRequest(method string, url string, body io.Reader, secret *tokens.Secret, deviceId string) (*http.Request, error) {
@@ -235,22 +238,61 @@ func getParseTime() string {
 	now = now.In(timeLocation)
 	return now.Format(timeLayout) + " GMT+0800 (中国标准时间)"
 }
+func getDpl(proxy string) bool {
+	if len(cachedScripts) != 0 {
+		return true
+	}
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+	request, err := http.NewRequest(http.MethodGet, "https://chat.openai.com/", nil)
+	request.Header.Set("User-Agent", userAgent)
+	request.Header.Set("Accept", "*/*")
+	if err != nil {
+		return false
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	doc, _ := goquery.NewDocumentFromReader(response.Body)
+	cachedScripts = nil
+	doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
+		src, exists := s.Attr("src")
+		if exists {
+			cachedScripts = append(cachedScripts, src)
+			if cachedDpl == "" {
+				idx := strings.Index(src, "dpl")
+				if idx >= 0 {
+					cachedDpl = src[idx:]
+				}
+			}
+		}
+	})
+	return len(cachedScripts) != 0
+}
 func getConfig() []interface{} {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	core := cores[rand.Intn(4)]
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	screen := screens[rand.Intn(3)]
-	return []interface{}{core + screen, getParseTime(), int64(4294705152), 0, userAgent}
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	script := cachedScripts[rand.Intn(len(cachedScripts))]
+	return []interface{}{core + screen, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl}
 
 }
-func CalcProofToken(seed string, diff string) string {
+func CalcProofToken(seed string, diff string, proxy string) string {
 	if answers[seed] != "" {
 		return answers[seed]
+	}
+	if !getDpl(proxy) {
+		return "gAAAAABwQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
 	}
 	config := getConfig()
 	diffLen := len(diff) / 2
 	hasher := sha3.New512()
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 1000000; i++ {
 		config[3] = i
 		json, _ := json.Marshal(config)
 		base := base64.StdEncoding.EncodeToString(json)
