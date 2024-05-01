@@ -279,15 +279,19 @@ func getConfig() []interface{} {
 	screen := screens[rand.Intn(3)]
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{core + screen, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl}
+	return []interface{}{core + screen, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US"}
 
 }
 func CalcProofToken(seed string, diff string, proxy string) string {
 	if answers[seed] != "" {
-		return answers[seed]
+		return "gAAAAAB" + answers[seed]
 	}
+	return "gAAAAAB" + generateAnswer(seed, diff, proxy)
+}
+
+func generateAnswer(seed string, diff string, proxy string) string {
 	if !getDpl(proxy) {
-		return "gAAAAABwQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
+		return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
 	}
 	config := getConfig()
 	diffLen := len(diff) / 2
@@ -300,11 +304,11 @@ func CalcProofToken(seed string, diff string, proxy string) string {
 		hash := hasher.Sum(nil)
 		hasher.Reset()
 		if hex.EncodeToString(hash[:diffLen]) <= diff {
-			answers[seed] = "gAAAAAB" + base
+			answers[seed] = base
 			return answers[seed]
 		}
 	}
-	return "gAAAAABwQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
+	return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
 }
 
 type ChatRequire struct {
@@ -320,7 +324,7 @@ func CheckRequire(secret *tokens.Secret, deviceId string, proxy string) *ChatReq
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-	body := bytes.NewBuffer([]byte(`{}`))
+	body := bytes.NewBuffer([]byte(`{"p":"` + "gAAAAAC" + generateAnswer(strconv.FormatFloat(rand.Float64(), 'f', -1, 64), "0", proxy) + `"}`))
 	var apiUrl string
 	if secret.Token == "" {
 		apiUrl = "https://chat.openai.com/backend-anon/sentinel/chat-requirements"
