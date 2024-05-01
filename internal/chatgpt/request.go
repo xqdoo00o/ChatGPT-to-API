@@ -294,7 +294,7 @@ func generateAnswer(seed string, diff string, hardware int, proxy string) (strin
 		return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`)), 0
 	}
 	config := getConfig(hardware)
-	diffLen := len(diff) / 2
+	diffLen := len(diff)
 	hasher := sha3.New512()
 	for i := 0; i < 1000000; i++ {
 		config[3] = i
@@ -303,7 +303,7 @@ func generateAnswer(seed string, diff string, hardware int, proxy string) (strin
 		hasher.Write([]byte(seed + base))
 		hash := hasher.Sum(nil)
 		hasher.Reset()
-		if hex.EncodeToString(hash[:diffLen]) <= diff {
+		if hex.EncodeToString(hash[:diffLen])[:diffLen] <= diff {
 			return base, config[0].(int)
 		}
 	}
