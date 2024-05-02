@@ -165,7 +165,7 @@ func nightmare(c *gin.Context) {
 	for i := 3; i > 0; i-- {
 		var continue_info *chatgpt.ContinueInfo
 		var response_part string
-		response_part, continue_info = chatgpt.Handler(c, response, &secret, deviceId, uid, translated_request, original_request.Stream)
+		response_part, continue_info = chatgpt.Handler(c, response, &secret, proxy_url, deviceId, uid, translated_request, original_request.Stream)
 		full_response += response_part
 		if continue_info == nil {
 			break
@@ -198,5 +198,5 @@ func nightmare(c *gin.Context) {
 	} else {
 		c.String(200, "data: [DONE]\n\n")
 	}
-	chatgpt.UnlockSpecConn(secret.Token, uid)
+	chatgpt.UnlockSpecConn(secret.Token+secret.TeamUserID, uid)
 }

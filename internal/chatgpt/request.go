@@ -12,6 +12,7 @@ import (
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
 	"math/rand"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -21,14 +22,15 @@ import (
 
 	_ "time/tzdata"
 
-	"github.com/gorilla/websocket"
-	"golang.org/x/crypto/sha3"
-
 	"github.com/PuerkitoBio/goquery"
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
+	tls "github.com/bogdanfinn/utls"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/sha3"
+	"golang.org/x/net/proxy"
 
 	chatgpt_response_converter "freechatgpt/conversion/response/chatgpt"
 
@@ -104,17 +106,39 @@ func getWSURL(secret *tokens.Secret, deviceId string, retry int) (string, error)
 	return WSSResp.WssUrl, nil
 }
 
-func createWSConn(url string, connInfo *connInfo, retry int) error {
-	dialer := websocket.DefaultDialer
+type rawDialer interface {
+	Dial(network string, addr string) (c net.Conn, err error)
+}
+
+func createWSConn(addr string, connInfo *connInfo, proxyURLString string, retry int) error {
+	dialer := websocket.Dialer{
+		NetDialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, _, _ := net.SplitHostPort(addr)
+			config := &tls.Config{ServerName: host, OmitEmptyPsk: true}
+			var rawDial rawDialer
+			if proxyURLString != "" {
+				proxyURL, _ := url.Parse(proxyURLString)
+				rawDial, _ = proxy.FromURL(proxyURL, proxy.Direct)
+			} else {
+				rawDial = &net.Dialer{}
+			}
+			dialConn, err := rawDial.Dial("tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			client := tls.UClient(dialConn, config, profiles.Okhttp4Android13.GetClientHelloId(), false, true)
+			return client, nil
+		},
+	}
 	dialer.EnableCompression = true
 	dialer.Subprotocols = []string{"json.reliable.webpubsub.azure.v1"}
-	conn, _, err := dialer.Dial(url, nil)
+	conn, _, err := dialer.Dial(addr, nil)
 	if err != nil {
 		if retry > 3 {
 			return err
 		}
 		time.Sleep(time.Second) // wait 1s to recreate ws
-		return createWSConn(url, connInfo, retry+1)
+		return createWSConn(addr, connInfo, proxyURLString, retry+1)
 	}
 	connInfo.conn = conn
 	connInfo.expire = time.Now().Add(time.Minute * 30)
@@ -179,7 +203,7 @@ func InitWSConn(secret *tokens.Secret, deviceId string, uuid string, proxy strin
 		if err != nil {
 			return err
 		}
-		createWSConn(wssURL, connInfo, 0)
+		createWSConn(wssURL, connInfo, proxy, 0)
 		if err != nil {
 			return err
 		}
@@ -477,7 +501,7 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, secret *token
 	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
 }
 
-func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, deviceId string, uuid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
+func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, proxy string, deviceId string, uuid string, translated_request chatgpt_types.ChatGPTRequest, stream bool) (string, *ContinueInfo) {
 	max_tokens := false
 
 	// Create a bufio.Reader from the response body
@@ -508,7 +532,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, dev
 
 	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
 		isWSS = true
-		connInfo = findSpecConn(secret.Token, uuid)
+		connInfo = findSpecConn(secret.Token+secret.TeamUserID, uuid)
 		if connInfo.conn == nil {
 			c.JSON(500, gin.H{"error": "No websocket connection"})
 			return "", nil
@@ -543,7 +567,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, dev
 				connInfo.ticker.Stop()
 				connInfo.conn.Close()
 				connInfo.conn = nil
-				err := createWSConn(wssUrl, connInfo, 0)
+				err := createWSConn(wssUrl, connInfo, proxy, 0)
 				if err != nil {
 					c.JSON(500, gin.H{"error": err.Error()})
 					return "", nil
