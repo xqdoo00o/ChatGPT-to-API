@@ -322,14 +322,12 @@ func CalcProofToken(require *ChatRequire, proxy string) string {
 
 func generateAnswer(seed string, diff string, proxy string) string {
 	GetDpl(proxy)
-	start := time.Now().UnixMilli()
 	config := getConfig()
 	diffLen := len(diff)
 	hasher := sha3.New512()
 	for i := 0; i < 500000; i++ {
 		config[3] = i
-		now := time.Now().UnixMilli()
-		config[9] = now - start
+		config[9] = (i + 2) / 2
 		json, _ := json.Marshal(config)
 		base := base64.StdEncoding.EncodeToString(json)
 		hasher.Write([]byte(seed + base))
