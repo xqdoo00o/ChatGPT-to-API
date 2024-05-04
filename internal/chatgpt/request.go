@@ -55,14 +55,23 @@ var (
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string][]*connInfo{}
 	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-	cores               = []int{8, 12, 16, 24}
-	screens             = []int{3000, 4000, 6000}
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
+	cachedHardware      = 0
 	cachedScripts       = []string{}
 	cachedDpl           = ""
+	cachedRequireProof  = ""
 )
 
+func init() {
+	cores := []int{8, 12, 16, 24}
+	screens := []int{3000, 4000, 6000}
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	core := cores[rand.Intn(4)]
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	screen := screens[rand.Intn(3)]
+	cachedHardware = core + screen
+}
 func newRequest(method string, url string, body io.Reader, secret *tokens.Secret, deviceId string) (*http.Request, error) {
 	request, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -263,19 +272,16 @@ func getParseTime() string {
 	return now.Format(timeLayout) + " GMT+0800 (中国标准时间)"
 }
 func GetDpl(proxy string) {
-	if len(cachedScripts) > 1 {
+	if len(cachedScripts) > 0 {
 		return
 	}
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-	chatgptUrl := "https://chatgpt.com/"
-	redirect := false
-	// sb openai no 301 redirect
-process:
-	request, err := http.NewRequest(http.MethodGet, chatgptUrl, nil)
+	request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com/?oai-dm=1", nil)
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
+	request.Header.Set("Cookie", "oai-dm-tgt-c-240329=2024-04-02")
 	if err != nil {
 		return
 	}
@@ -298,41 +304,29 @@ process:
 			}
 		}
 	})
-	if len(cachedScripts) == 0 && !redirect {
-		chatgptUrl = "https://chat.openai.com/"
-		redirect = true
-		goto process
-	}
 	if len(cachedScripts) == 0 {
 		cachedScripts = append(cachedScripts, "https://cdn.oaistatic.com/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a")
 		cachedDpl = "dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a"
 	}
 }
-func getConfig(hardware int) []interface{} {
-	if hardware == 0 {
-		rand.New(rand.NewSource(time.Now().UnixNano()))
-		core := cores[rand.Intn(4)]
-		rand.New(rand.NewSource(time.Now().UnixNano()))
-		screen := screens[rand.Intn(3)]
-		hardware = core + screen
-	}
+func getConfig() []interface{} {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{hardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US", 0}
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US", 0}
 
 }
 func CalcProofToken(require *ChatRequire, proxy string) string {
-	proof, _ := generateAnswer(require.Proof.Seed, require.Proof.Difficulty, require.Hardware, proxy)
+	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty, proxy)
 	return "gAAAAAB" + proof
 }
 
-func generateAnswer(seed string, diff string, hardware int, proxy string) (string, int) {
+func generateAnswer(seed string, diff string, proxy string) string {
 	GetDpl(proxy)
 	start := time.Now().UnixMilli()
-	config := getConfig(hardware)
+	config := getConfig()
 	diffLen := len(diff)
 	hasher := sha3.New512()
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < 500000; i++ {
 		config[3] = i
 		now := time.Now().UnixMilli()
 		config[9] = now - start
@@ -342,10 +336,10 @@ func generateAnswer(seed string, diff string, hardware int, proxy string) (strin
 		hash := hasher.Sum(nil)
 		hasher.Reset()
 		if hex.EncodeToString(hash[:diffLen])[:diffLen] <= diff {
-			return base, config[0].(int)
+			return base
 		}
 	}
-	return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`)), config[0].(int)
+	return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`))
 }
 
 type ChatRequire struct {
@@ -355,15 +349,16 @@ type ChatRequire struct {
 		Required bool   `json:"required"`
 		DX       string `json:"dx,omitempty"`
 	} `json:"arkose"`
-	Hardware int
 }
 
 func CheckRequire(secret *tokens.Secret, deviceId string, proxy string) *ChatRequire {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-	proof, hardware := generateAnswer(strconv.FormatFloat(rand.Float64(), 'f', -1, 64), "0", 0, proxy)
-	body := bytes.NewBuffer([]byte(`{"p":"` + "gAAAAAC" + proof + `"}`))
+	if cachedRequireProof == "" {
+		cachedRequireProof = "gAAAAAC" + generateAnswer(strconv.FormatFloat(rand.Float64(), 'f', -1, 64), "0", proxy)
+	}
+	body := bytes.NewBuffer([]byte(`{"p":"` + cachedRequireProof + `"}`))
 	var apiUrl string
 	if secret.Token == "" {
 		apiUrl = "https://chat.openai.com/backend-anon/sentinel/chat-requirements"
@@ -385,7 +380,6 @@ func CheckRequire(secret *tokens.Secret, deviceId string, proxy string) *ChatReq
 	if err != nil {
 		return nil
 	}
-	require.Hardware = hardware
 	return &require
 }
 
