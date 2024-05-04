@@ -262,22 +262,26 @@ func getParseTime() string {
 	now = now.In(timeLocation)
 	return now.Format(timeLayout) + " GMT+0800 (中国标准时间)"
 }
-func getDpl(proxy string) bool {
-	if len(cachedScripts) != 0 {
-		return true
+func GetDpl(proxy string) {
+	if len(cachedScripts) > 1 {
+		return
 	}
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-	request, err := http.NewRequest(http.MethodGet, "https://chat.openai.com/", nil)
+	chatgptUrl := "https://chatgpt.com/"
+	redirect := false
+	// sb openai no 301 redirect
+process:
+	request, err := http.NewRequest(http.MethodGet, chatgptUrl, nil)
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
 	if err != nil {
-		return false
+		return
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return false
+		return
 	}
 	defer response.Body.Close()
 	doc, _ := goquery.NewDocumentFromReader(response.Body)
@@ -294,7 +298,15 @@ func getDpl(proxy string) bool {
 			}
 		}
 	})
-	return len(cachedScripts) != 0
+	if len(cachedScripts) == 0 && !redirect {
+		chatgptUrl = "https://chat.openai.com/"
+		redirect = true
+		goto process
+	}
+	if len(cachedScripts) == 0 {
+		cachedScripts = append(cachedScripts, "https://cdn.oaistatic.com/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a")
+		cachedDpl = "dpl=baf36960d05dde6d8b941194fa4093fb5cb78c6a"
+	}
 }
 func getConfig(hardware int) []interface{} {
 	if hardware == 0 {
@@ -306,7 +318,7 @@ func getConfig(hardware int) []interface{} {
 	}
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{hardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US"}
+	return []interface{}{hardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US", 0}
 
 }
 func CalcProofToken(require *ChatRequire, proxy string) string {
@@ -315,14 +327,15 @@ func CalcProofToken(require *ChatRequire, proxy string) string {
 }
 
 func generateAnswer(seed string, diff string, hardware int, proxy string) (string, int) {
-	if !getDpl(proxy) {
-		return "wQ8Lk5FbGpA2NcR9dShT6gYjU7VxZ4D" + base64.StdEncoding.EncodeToString([]byte(`"`+seed+`"`)), 0
-	}
+	GetDpl(proxy)
+	start := time.Now().UnixMilli()
 	config := getConfig(hardware)
 	diffLen := len(diff)
 	hasher := sha3.New512()
 	for i := 0; i < 1000000; i++ {
 		config[3] = i
+		now := time.Now().UnixMilli()
+		config[9] = now - start
 		json, _ := json.Marshal(config)
 		base := base64.StdEncoding.EncodeToString(json)
 		hasher.Write([]byte(seed + base))
@@ -437,6 +450,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 	if proofToken != "" {
 		request.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
+	request.Header.Set("Origin", "https://chat.openai.com")
+	request.Header.Set("Referer", "https://chat.openai.com/c/"+message.ConversationID)
 	if err != nil {
 		return &http.Response{}, err
 	}
