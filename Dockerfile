@@ -8,6 +8,10 @@ ENV CGO_ENABLED=0
 # Set the working directory
 WORKDIR /app
 
+# update CA certificates
+RUN apk update && apk upgrade && apk add --no-cache ca-certificates
+RUN update-ca-certificates
+
 # Copy the Go Modules manifests (go.mod and go.sum files)
 COPY go.mod go.sum ./
 
@@ -25,6 +29,9 @@ FROM scratch
 
 # Set the working directory
 WORKDIR /app
+
+# Copy CA certificates from the builder stage
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Copy the built Go binary from the builder stage
 COPY --from=builder /app/ChatGPT-To-API /app/ChatGPT-To-API
