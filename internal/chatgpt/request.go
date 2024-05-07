@@ -94,7 +94,7 @@ func newRequest(method string, url string, body io.Reader, secret *tokens.Secret
 }
 
 func getWSURL(secret *tokens.Secret, deviceId string, retry int) (string, error) {
-	request, err := newRequest(http.MethodPost, "https://chat.openai.com/backend-api/register-websocket", nil, secret, deviceId)
+	request, err := newRequest(http.MethodPost, "https://chatgpt.com/backend-api/register-websocket", nil, secret, deviceId)
 	if err != nil {
 		return "", err
 	}
@@ -253,10 +253,13 @@ func InitWSConn(secret *tokens.Secret, deviceId string, uuid string, proxy strin
 }
 
 func SetOAICookie(uuid string) {
-	u, _ := url.Parse("https://openai.com")
+	u, _ := url.Parse("https://chatgpt.com")
 	client.GetCookieJar().SetCookies(u, []*http.Cookie{{
 		Name:  "oai-did",
 		Value: uuid,
+	}, {
+		Name:  "oai-dm-tgt-c-240329",
+		Value: "2024-04-02",
 	}})
 }
 
@@ -281,7 +284,6 @@ func GetDpl(proxy string) {
 	request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com/?oai-dm=1", nil)
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Cookie", "oai-dm-tgt-c-240329=2024-04-02")
 	if err != nil {
 		return
 	}
@@ -359,9 +361,9 @@ func CheckRequire(secret *tokens.Secret, deviceId string, proxy string) *ChatReq
 	body := bytes.NewBuffer([]byte(`{"p":"` + cachedRequireProof + `"}`))
 	var apiUrl string
 	if secret.Token == "" {
-		apiUrl = "https://chat.openai.com/backend-anon/sentinel/chat-requirements"
+		apiUrl = "https://chatgpt.com/backend-anon/sentinel/chat-requirements"
 	} else {
-		apiUrl = "https://chat.openai.com/backend-api/sentinel/chat-requirements"
+		apiUrl = "https://chatgpt.com/backend-api/sentinel/chat-requirements"
 	}
 	request, err := newRequest(http.MethodPost, apiUrl, body, secret, deviceId)
 	if err != nil {
@@ -389,7 +391,7 @@ type urlAttr struct {
 }
 
 func getURLAttribution(secret *tokens.Secret, deviceId string, url string) string {
-	request, err := newRequest(http.MethodPost, "https://chat.openai.com/backend-api/attributions", bytes.NewBuffer([]byte(`{"urls":["`+url+`"]}`)), secret, deviceId)
+	request, err := newRequest(http.MethodPost, "https://chatgpt.com/backend-api/attributions", bytes.NewBuffer([]byte(`{"urls":["`+url+`"]}`)), secret, deviceId)
 	if err != nil {
 		return ""
 	}
@@ -415,7 +417,7 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 		client.SetProxy(proxy)
 	}
 
-	apiUrl := "https://chat.openai.com/backend-api/conversation"
+	apiUrl := "https://chatgpt.com/backend-api/conversation"
 	if API_REVERSE_PROXY != "" {
 		apiUrl = API_REVERSE_PROXY
 	}
@@ -442,8 +444,8 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 	if proofToken != "" {
 		request.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
-	request.Header.Set("Origin", "https://chat.openai.com")
-	request.Header.Set("Referer", "https://chat.openai.com/c/"+message.ConversationID)
+	request.Header.Set("Origin", "https://chatgpt.com")
+	request.Header.Set("Referer", "https://chatgpt.com/c/"+message.ConversationID)
 	if err != nil {
 		return &http.Response{}, err
 	}
@@ -675,7 +677,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 			}
 			response_string := ""
 			if original_response.Message.Content.ContentType == "multimodal_text" {
-				apiUrl := "https://chat.openai.com/backend-api/files/"
+				apiUrl := "https://chatgpt.com/backend-api/files/"
 				if FILES_REVERSE_PROXY != "" {
 					apiUrl = FILES_REVERSE_PROXY
 				}

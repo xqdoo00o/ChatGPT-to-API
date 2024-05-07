@@ -27,7 +27,7 @@ All authenticated access tokens and PUID will store in `access_tokens.json`
 
 Auto renew access tokens and PUID after 1 day
 
-Caution! please use unblocked ip for authentication, first login to `https://chat.openai.com/` to check ip availability if you can.
+Caution! please use unblocked ip for authentication, first login to `https://chatgpt.com/` to check ip availability if you can.
 
 ### HAR file pool
 
@@ -35,9 +35,9 @@ Currently logged in account, using the GPT-4 model and most GPT-3.5 models, you 
 
   1. Use a chromium-based browser (Chrome, Edge) to open the browser developer tools (F12), switch to the Network tab, and check the **preserve log** option.
 
-  2. Log in to `https://chat.openai.com/`, create a new chat and select the GPT-4 model, enter any text, switch to the GPT-3.5 model, and enter any text.
+  2. Log in to `https://chatgpt.com/`, create a new chat and select the GPT-4 model, enter any text, switch to the GPT-3.5 model, and enter any text.
 
-  3. Click the Export HAR button under the Network tab to export the file `chat.openai.com.har` and place it in the `harPool` folder of the same level as this program.
+  3. Click the Export HAR button under the Network tab to export the file `chatgpt.com.har` and place it in the `harPool` folder of the same level as this program.
 
 ### API Authentication (Optional)
 

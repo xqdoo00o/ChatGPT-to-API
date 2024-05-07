@@ -24,7 +24,7 @@
 
 每天自动更新Access tokens和PUID
 
-注意！ 请使用未封锁的ip登录账号，请先打开浏览器登录`https://chat.openai.com/`以检查ip是否可用
+注意！ 请使用未封锁的ip登录账号，请先打开浏览器登录`https://chatgpt.com/`以检查ip是否可用
 
 ### HAR文件池
 
@@ -32,9 +32,9 @@
 
   1. 使用基于chromium的浏览器（Chrome，Edge）打开浏览器开发者工具（F12），并切换到网络标签页，勾选**保留日志**选项。
 
-  2. 登录`https://chat.openai.com/`，新建聊天并选择GPT-4模型，随意输入下文字，切换到GPT-3.5模型，随意输入下文字。
+  2. 登录`https://chatgpt.com/`，新建聊天并选择GPT-4模型，随意输入下文字，切换到GPT-3.5模型，随意输入下文字。
 
-  3. 点击网络标签页下的导出HAR按钮，导出文件`chat.openai.com.har`，放置到本程序同级的`harPool`文件夹里。
+  3. 点击网络标签页下的导出HAR按钮，导出文件`chatgpt.com.har`，放置到本程序同级的`harPool`文件夹里。
 
 ### API 密钥（可选）
 

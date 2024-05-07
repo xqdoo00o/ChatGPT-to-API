@@ -11,5 +11,5 @@ services:
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 8080
       ADMIN_PASSWORD: TotallySecurePassword
-      # If the parameter API_REVERSE_PROXY is empty, the default request URL is https://chat.openai.com/backend-api/conversation, and the PUID is <NOT> equired.
+      # If the parameter API_REVERSE_PROXY is empty, the default request URL is https://chatgpt.com/backend-api/conversation, and the PUID is <NOT> equired.
       PUID: xxx

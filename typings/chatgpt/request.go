@@ -123,6 +123,11 @@ var (
 )
 
 func init() {
+	u, _ := url.Parse("https://chatgpt.com")
+	client.GetCookieJar().SetCookies(u, []*http.Cookie{{
+		Name:  "oai-dm-tgt-c-240329",
+		Value: "2024-04-02",
+	}})
 	// from https://chromium.googlesource.com/chromium/src/+/HEAD/net/base/mime_util.cc
 	mimeMap := map[string]string{
 		"webm":                "video/webm",
@@ -356,7 +361,7 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 		fileCase = "ace_upload"
 	}
 	dataLen := strconv.Itoa(len(data))
-	request, err := newRequest(http.MethodPost, "https://chat.openai.com/backend-api/files", bytes.NewBuffer([]byte(`{"file_name":"`+name+`","file_size":`+dataLen+`,"use_case":"`+fileCase+`"}`)), secret, deviceId)
+	request, err := newRequest(http.MethodPost, "https://chatgpt.com/backend-api/files", bytes.NewBuffer([]byte(`{"file_name":"`+name+`","file_size":`+dataLen+`,"use_case":"`+fileCase+`"}`)), secret, deviceId)
 	if err != nil {
 		return ""
 	}
@@ -387,7 +392,7 @@ func uploadBinary(data []byte, mime string, name string, isImg bool, secret *tok
 	if response.StatusCode != 201 {
 		return ""
 	}
-	request, err = newRequest(http.MethodPost, "https://chat.openai.com/backend-api/files/"+fileResp.File_id+"/uploaded", bytes.NewBuffer([]byte(`{}`)), secret, deviceId)
+	request, err = newRequest(http.MethodPost, "https://chatgpt.com/backend-api/files/"+fileResp.File_id+"/uploaded", bytes.NewBuffer([]byte(`{}`)), secret, deviceId)
 	if err != nil {
 		return ""
 	}

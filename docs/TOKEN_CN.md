@@ -12,7 +12,7 @@ http://ai.fakeopen.com/auth
 你需要在这个新的网站的指导下安装浏览器插件，官方说明的有效期是14天。支持谷歌微软等第三方登录。（我谷歌注册的OpenAI就可以用这个）    
 
 ## 官网获取 Token
-https://chat.openai.com/api/auth/session
+https://chatgpt.com/api/auth/session
 
 打开后是个JSON，你需要先登录官方的ChatGPT网页版。里面有一个参数就是AccessToken。
 
