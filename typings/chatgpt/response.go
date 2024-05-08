@@ -51,7 +51,6 @@ type Author struct {
 }
 
 type Metadata struct {
-	Timestamp     string         `json:"timestamp_"`
 	Citations     []Citation     `json:"citations,omitempty"`
 	MessageType   string         `json:"message_type"`
 	FinishDetails *FinishDetails `json:"finish_details"`
