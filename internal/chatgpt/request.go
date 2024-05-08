@@ -529,7 +529,6 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 	var previous_text typings.StringStruct
 	var original_response chatgpt_types.ChatGPTResponse
 	var isRole = true
-	var isEnd = false
 	var imgSource []string
 	var isWSS = false
 	var convId string
@@ -654,14 +653,14 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 				continue
 			}
 			if original_response.Message.Content.ContentType == "text" && original_response.Message.ID != msgId {
-				if msgId == "" {
+				if msgId == "" && original_response.Message.Content.Parts[0].(string) == "" {
 					msgId = original_response.Message.ID
 				} else {
 					continue
 				}
 			}
 			if original_response.Message.EndTurn != nil {
-				isEnd = true
+				msgId = ""
 			}
 			if len(original_response.Message.Metadata.Citations) != 0 {
 				r := []rune(original_response.Message.Content.Parts[0].(string))
@@ -713,11 +712,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 				response_string = chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
 			}
 			if response_string == "" {
-				if isEnd {
-					goto endProcess
-				} else {
-					continue
-				}
+				continue
 			}
 			isRole = false
 			if stream {
@@ -726,7 +721,6 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 					return "", nil
 				}
 			}
-		endProcess:
 			// Flush the response writer buffer to ensure that the client receives each line as it's written
 			c.Writer.Flush()
 
@@ -736,12 +730,10 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 				}
 				finish_reason = original_response.Message.Metadata.FinishDetails.Type
 			}
-			if isEnd {
-				if stream {
-					final_line := official_types.StopChunk(finish_reason)
-					c.Writer.WriteString("data: " + final_line.String() + "\n\n")
-				}
-				break
+		} else {
+			if stream {
+				final_line := official_types.StopChunk(finish_reason)
+				c.Writer.WriteString("data: " + final_line.String() + "\n\n")
 			}
 		}
 	}
