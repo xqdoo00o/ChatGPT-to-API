@@ -736,6 +736,9 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 				final_line := official_types.StopChunk(finish_reason)
 				c.Writer.WriteString("data: " + final_line.String() + "\n\n")
 			}
+			if isWSS {
+				break
+			}
 		}
 	}
 	if !max_tokens {
