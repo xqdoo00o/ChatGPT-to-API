@@ -741,10 +741,15 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 			}
 		}
 	}
-	if !max_tokens {
-		return strings.Join(imgSource, "") + "\n" + previous_text.Text, nil
+	respText := strings.Join(imgSource, "")
+	if respText != "" {
+		respText += "\n"
 	}
-	return strings.Join(imgSource, "") + "\n" + previous_text.Text, &ContinueInfo{
+	respText += previous_text.Text
+	if !max_tokens {
+		return respText, nil
+	}
+	return respText, &ContinueInfo{
 		ConversationID: original_response.ConversationID,
 		ParentID:       original_response.Message.ID,
 	}
