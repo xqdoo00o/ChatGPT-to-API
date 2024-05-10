@@ -28,7 +28,6 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 				val := api_request.Model[12:]
 				chatgpt_request.ConversationMode.Kind = "gizmo_interaction"
 				chatgpt_request.ConversationMode.GizmoId = val
-				chatgpt_request.Model = "text-davinci-002-render-sha"
 			}
 		}
 	}
