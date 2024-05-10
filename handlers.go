@@ -175,6 +175,10 @@ func nightmare(c *gin.Context) {
 		translated_request.Action = "continue"
 		translated_request.ConversationID = continue_info.ConversationID
 		translated_request.ParentMessageID = continue_info.ParentID
+		chat_require = chatgpt.CheckRequire(&secret, deviceId, proxy_url)
+		if chat_require.Proof.Required {
+			proofToken = chatgpt.CalcProofToken(chat_require, proxy_url)
+		}
 		if chat_require.Arkose.Required {
 			chatgpt_request_converter.RenewTokenForRequest(&translated_request, secret.PUID, chat_require.Arkose.DX, proxy_url)
 		}
