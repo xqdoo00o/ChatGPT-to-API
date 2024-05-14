@@ -16,9 +16,6 @@ var gpt4Regexp = regexp.MustCompile(`^(gpt-4|gpt-4o)(?:-gizmo-g-(\w+))?$`)
 func ConvertAPIRequest(api_request official_types.APIRequest, account string, secret *tokens.Secret, deviceId string, requireArk bool, dx string, proxy string) chatgpt_types.ChatGPTRequest {
 	chatgpt_request := chatgpt_types.NewChatGPTRequest()
 	var api_version int
-	if secret.PUID == "" {
-		api_request.Model = "gpt-3.5"
-	}
 	if strings.HasPrefix(api_request.Model, "gpt-3.5") {
 		api_version = 3
 		chatgpt_request.Model = "text-davinci-002-render-sha"
@@ -30,7 +27,7 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 		} else {
 			chatgpt_request.Model = "gpt-4"
 		}
-		if len(matches) == 3 {
+		if len(matches) == 3 && matches[2] != "" {
 			chatgpt_request.ConversationMode.Kind = "gizmo_interaction"
 			chatgpt_request.ConversationMode.GizmoId = "g-" + matches[2]
 		}
