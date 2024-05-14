@@ -21,7 +21,11 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 		chatgpt_request.Model = "text-davinci-002-render-sha"
 	} else if strings.HasPrefix(api_request.Model, "gpt-4") {
 		api_version = 4
-		chatgpt_request.Model = "gpt-4"
+		if api_request.Model == "gpt-4o" {
+			chatgpt_request.Model = api_request.Model
+		} else {
+			chatgpt_request.Model = "gpt-4"
+		}	
 		if len(api_request.Model) > 12 {
 			key := api_request.Model[6:11]
 			if key == "gizmo" {
