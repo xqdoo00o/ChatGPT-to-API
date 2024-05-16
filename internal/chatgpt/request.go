@@ -51,6 +51,7 @@ var (
 		tls_client.WithTimeoutSeconds(600),
 		tls_client.WithClientProfile(profiles.Okhttp4Android13),
 	}...)
+	hostURL, _          = url.Parse("https://chatgpt.com")
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string][]*connInfo{}
@@ -254,8 +255,7 @@ func InitWSConn(secret *tokens.Secret, deviceId string, uuid string, proxy strin
 }
 
 func SetOAICookie(uuid string) {
-	u, _ := url.Parse("https://chatgpt.com")
-	client.GetCookieJar().SetCookies(u, []*http.Cookie{{
+	client.GetCookieJar().SetCookies(hostURL, []*http.Cookie{{
 		Name:  "oai-did",
 		Value: uuid,
 	}, {
