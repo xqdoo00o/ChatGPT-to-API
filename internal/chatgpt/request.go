@@ -81,7 +81,7 @@ func newRequest(method string, url string, body io.Reader, secret *tokens.Secret
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
 	request.Header.Set("Oai-Device-Id", deviceId)
-	request.Header.Set("Oai-Language", "en-US")
+	request.Header.Set("Oai-Language", "zh-CN")
 	if secret.Token != "" {
 		request.Header.Set("Authorization", "Bearer "+secret.Token)
 	}
@@ -253,6 +253,24 @@ func InitWSConn(secret *tokens.Secret, deviceId string, uuid string, proxy strin
 	}
 }
 
+// func PreMe(secret *tokens.Secret, deviceId string, proxy string) {
+// 	if proxy != "" {
+// 		client.SetProxy(proxy)
+// 	}
+// 	request, err := newRequest(http.MethodGet, "https://chatgpt.com/backend-anon/me", nil, secret, deviceId)
+// 	if err != nil {
+// 		return
+// 	}
+// 	request.Header.Set("Referer", "https://chatgpt.com/")
+// 	response, err := client.Do(request)
+// 	if err != nil {
+// 		return
+// 	}
+// 	defer response.Body.Close()
+// 	a, _ := io.ReadAll(response.Body)
+// 	println(string(a))
+// }
+
 func SetOAICookie(uuid string) {
 	u, _ := url.Parse("https://chatgpt.com")
 	client.GetCookieJar().SetCookies(u, []*http.Cookie{{
@@ -297,14 +315,16 @@ func GetDpl(proxy string) {
 	defer response.Body.Close()
 	doc, _ := goquery.NewDocumentFromReader(response.Body)
 	scripts := []string{}
+	inited := false
 	doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
 		src, exists := s.Attr("src")
 		if exists {
 			scripts = append(scripts, src)
-			if cachedDpl == "" {
+			if !inited {
 				idx := strings.Index(src, "dpl")
 				if idx >= 0 {
 					cachedDpl = src[idx:]
+					inited = true
 				}
 			}
 		}
@@ -316,7 +336,7 @@ func GetDpl(proxy string) {
 func getConfig() []interface{} {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN,en,en-GB,en-US", 0}
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend"}
 }
 func CalcProofToken(require *ChatRequire, proxy string) string {
 	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty, proxy)
@@ -417,8 +437,12 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-
-	apiUrl := "https://chatgpt.com/backend-api/conversation"
+	var apiUrl string
+	if secret.Token == "" {
+		apiUrl = "https://chatgpt.com/backend-anon/conversation"
+	} else {
+		apiUrl = "https://chatgpt.com/backend-api/conversation"
+	}
 	if API_REVERSE_PROXY != "" {
 		apiUrl = API_REVERSE_PROXY
 	}
@@ -446,7 +470,7 @@ func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secre
 		request.Header.Set("Openai-Sentinel-Proof-Token", proofToken)
 	}
 	request.Header.Set("Origin", "https://chatgpt.com")
-	request.Header.Set("Referer", "https://chatgpt.com/c/"+message.ConversationID)
+	request.Header.Set("Referer", "https://chatgpt.com/")
 	if err != nil {
 		return &http.Response{}, err
 	}

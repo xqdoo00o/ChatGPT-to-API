@@ -114,7 +114,7 @@ func nightmare(c *gin.Context) {
 	var deviceId string
 	if account == "" {
 		deviceId = uid
-		chatgpt.SetOAICookie(uid)
+		chatgpt.SetOAICookie(deviceId)
 	} else {
 		deviceId = generateUUID(account)
 		chatgpt.SetOAICookie(deviceId)
