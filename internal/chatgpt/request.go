@@ -253,24 +253,6 @@ func InitWSConn(secret *tokens.Secret, deviceId string, uuid string, proxy strin
 	}
 }
 
-// func PreMe(secret *tokens.Secret, deviceId string, proxy string) {
-// 	if proxy != "" {
-// 		client.SetProxy(proxy)
-// 	}
-// 	request, err := newRequest(http.MethodGet, "https://chatgpt.com/backend-anon/me", nil, secret, deviceId)
-// 	if err != nil {
-// 		return
-// 	}
-// 	request.Header.Set("Referer", "https://chatgpt.com/")
-// 	response, err := client.Do(request)
-// 	if err != nil {
-// 		return
-// 	}
-// 	defer response.Body.Close()
-// 	a, _ := io.ReadAll(response.Body)
-// 	println(string(a))
-// }
-
 func SetOAICookie(uuid string) {
 	u, _ := url.Parse("https://chatgpt.com")
 	client.GetCookieJar().SetCookies(u, []*http.Cookie{{
@@ -370,6 +352,7 @@ type ChatRequire struct {
 		Required bool   `json:"required"`
 		DX       string `json:"dx,omitempty"`
 	} `json:"arkose"`
+	ForceLogin bool `json:"force_login,omitempty"`
 }
 
 func CheckRequire(secret *tokens.Secret, deviceId string, proxy string) *ChatRequire {
@@ -399,6 +382,9 @@ func CheckRequire(secret *tokens.Secret, deviceId string, proxy string) *ChatReq
 	var require ChatRequire
 	err = json.NewDecoder(response.Body).Decode(&require)
 	if err != nil {
+		return nil
+	}
+	if require.ForceLogin {
 		return nil
 	}
 	return &require
