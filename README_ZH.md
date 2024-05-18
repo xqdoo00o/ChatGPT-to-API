@@ -15,10 +15,13 @@
 
 格式:
 ```
-邮箱:密码
-邮箱:密码
+邮箱A:密码
+邮箱B:密码:2
+邮箱C:密码:2/5
 ...
 ```
+
+密码后的数字表示轮询次数，默认为1次。上例表示第一次对话使用账户A，而后两次对话使用账户B，账户C为Teams账户，接着五次对话使用账户C的Teams，然后两次使用账户C的个人，如此循环。
 
 所有登录后的Access tokens和PUID会存放在`access_tokens.json`
 
@@ -70,10 +73,6 @@ go build
     socks5://127.0.0.1:9999
     ...
     ```
-  - `access_tokens.json` - 一个存放Access tokens 和PUID JSON数组的文件 (可使用 PATCH请求更新Access tokens [correct endpoint](https://github.com/xqdoo00o/ChatGPT-to-API/blob/master/docs/admin.md))
-    ```
-    {"邮箱1":{token:"access_token1", puid:"puid1"}, "邮箱2":{token:"access_token2", puid:"puid2"}...}
-    ```
   - `cookies.json` - 一个存放登录cookies的文件，如果OpenAI账户为谷歌等第三方登录（第一方账号也同样适用），可在`accounts.txt`添加第三方账户和任意密码，修改此文件如下即可正常登录
     ```
     {
@@ -93,6 +92,7 @@ go build
         ]
     }
     ```
+    如使用refresh_token，把Name的值改为"refresh_token"，Value的值改为refresh_token。
 
 ## 用户管理文档
 https://github.com/xqdoo00o/ChatGPT-to-API/blob/master/docs/admin.md
