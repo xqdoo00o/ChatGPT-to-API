@@ -71,8 +71,8 @@ type ChatGPTRequest struct {
 	ConversationID             string            `json:"conversation_id,omitempty"`
 	Model                      string            `json:"model"`
 	HistoryAndTrainingDisabled bool              `json:"history_and_training_disabled"`
-	ArkoseToken                string            `json:"arkose_token,omitempty"`
 	WebsocketRequestId         string            `json:"websocket_request_id"`
+	ForceSSE                   bool              `json:"force_use_sse"`
 }
 type FileResp struct {
 	File_id    string `json:"file_id"`
@@ -237,6 +237,7 @@ func NewChatGPTRequest() ChatGPTRequest {
 		HistoryAndTrainingDisabled: disable_history,
 		ConversationMode:           ChatGPTConvMode{Kind: "primary_assistant"},
 		WebsocketRequestId:         uuid.NewString(),
+		ForceSSE:                   true,
 	}
 }
 

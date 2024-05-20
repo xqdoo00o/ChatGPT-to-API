@@ -7,10 +7,10 @@ import (
 	official_types "freechatgpt/typings/official"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	arkose "github.com/xqdoo00o/funcaptcha"
 )
 
 var (
@@ -119,26 +119,7 @@ func nightmare(c *gin.Context) {
 		deviceId = generateUUID(account)
 		chatgpt.SetOAICookie(deviceId)
 	}
-	var chat_require *chatgpt.ChatRequire
-	var wg sync.WaitGroup
-	if secret.Token == "" {
-		wg.Add(1)
-	} else {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			err = chatgpt.InitWSConn(&secret, deviceId, uid, proxy_url)
-		}()
-	}
-	go func() {
-		defer wg.Done()
-		chat_require = chatgpt.CheckRequire(&secret, deviceId, proxy_url)
-	}()
-	wg.Wait()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "unable to create ws tunnel"})
-		return
-	}
+	chat_require := chatgpt.CheckRequire(&secret, deviceId, proxy_url)
 	if chat_require == nil {
 		c.JSON(500, gin.H{"error": "unable to check chat requirement"})
 		return
@@ -147,10 +128,17 @@ func nightmare(c *gin.Context) {
 	if chat_require.Proof.Required {
 		proofToken = chatgpt.CalcProofToken(chat_require, proxy_url)
 	}
+	var arkoseToken string
+	if chat_require.Arkose.Required {
+		arkoseToken, err = arkose.GetOpenAIToken(4, secret.PUID, chat_require.Arkose.DX, proxy_url)
+		if err != nil {
+			println("Error getting Arkose token: ", err)
+		}
+	}
 	// Convert the chat request to a ChatGPT request
-	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, deviceId, chat_require.Arkose.Required, chat_require.Arkose.DX, proxy_url)
+	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, deviceId, proxy_url)
 
-	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proofToken, proxy_url)
+	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, proxy_url)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": "error sending request",
@@ -180,9 +168,12 @@ func nightmare(c *gin.Context) {
 			proofToken = chatgpt.CalcProofToken(chat_require, proxy_url)
 		}
 		if chat_require.Arkose.Required {
-			chatgpt_request_converter.RenewTokenForRequest(&translated_request, secret.PUID, chat_require.Arkose.DX, proxy_url)
+			arkoseToken, err = arkose.GetOpenAIToken(4, secret.PUID, chat_require.Arkose.DX, proxy_url)
+			if err != nil {
+				println("Error getting Arkose token: ", err)
+			}
 		}
-		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, proofToken, proxy_url)
+		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, proxy_url)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "error sending request",
@@ -202,5 +193,5 @@ func nightmare(c *gin.Context) {
 	} else {
 		c.String(200, "data: [DONE]\n\n")
 	}
-	chatgpt.UnlockSpecConn(secret.Token+secret.TeamUserID, uid)
+	// chatgpt.UnlockSpecConn(secret.Token+secret.TeamUserID, uid)
 }

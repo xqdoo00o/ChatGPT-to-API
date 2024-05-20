@@ -14,7 +14,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
 	github.com/tidwall/gjson v1.17.1
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240518064833-c9bef8c55476
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240520071626-7f9e463abed0
 	github.com/xqdoo00o/funcaptcha v0.0.0-20240507071758-6c32cfc34bdc
 	golang.org/x/crypto v0.23.0
 	golang.org/x/image v0.15.0
