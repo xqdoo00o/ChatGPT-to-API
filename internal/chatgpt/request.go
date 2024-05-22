@@ -46,16 +46,13 @@ type connInfo struct {
 }
 
 var (
-	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
-		tls_client.WithCookieJar(tls_client.NewCookieJar()),
-		tls_client.WithTimeoutSeconds(600),
-		tls_client.WithClientProfile(profiles.Okhttp4Android13),
-	}...)
+	client              tls_client.HttpClient
 	hostURL, _          = url.Parse("https://chatgpt.com")
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
 	connPool            = map[string][]*connInfo{}
 	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	startTime           = time.Now()
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
 	cachedHardware      = 0
@@ -72,6 +69,23 @@ func init() {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	screen := screens[rand.Intn(3)]
 	cachedHardware = core + screen
+
+	envClientProfileStr := os.Getenv("CLIENT_PROFILE")
+	var clientProfile profiles.ClientProfile
+	if profile, ok := profiles.MappedTLSClients[envClientProfileStr]; ok {
+		clientProfile = profile
+	} else {
+		clientProfile = profiles.Okhttp4Android13
+	}
+	envUserAgent := os.Getenv("UA")
+	if envUserAgent != "" {
+		userAgent = envUserAgent
+	}
+	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
+		tls_client.WithCookieJar(tls_client.NewCookieJar()),
+		tls_client.WithTimeoutSeconds(600),
+		tls_client.WithClientProfile(clientProfile),
+	}...)
 }
 
 func newRequest(method string, url string, body io.Reader, secret *tokens.Secret, deviceId string) (*http.Request, error) {
@@ -318,7 +332,8 @@ func GetDpl(proxy string) {
 func getConfig() []interface{} {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
-	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend"}
+	timeNum := (float64(time.Since(startTime).Nanoseconds()) + rand.Float64()) / 1e6
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend", timeNum}
 }
 func CalcProofToken(require *ChatRequire, proxy string) string {
 	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty, proxy)
