@@ -682,7 +682,7 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 					continue
 				}
 			}
-			if original_response.Message.EndTurn != nil {
+			if original_response.Message.EndTurn != nil && !original_response.Message.EndTurn.(bool) {
 				msgId = ""
 			}
 			if len(original_response.Message.Metadata.Citations) != 0 {
@@ -734,11 +734,10 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 			if response_string == "" {
 				response_string = chatgpt_response_converter.ConvertToString(&original_response, &previous_text, isRole)
 			}
-			if response_string == "" {
-				continue
+			if isRole && response_string != "" {
+				isRole = false
 			}
-			isRole = false
-			if stream {
+			if stream && response_string != "" {
 				_, err = c.Writer.WriteString(response_string)
 				if err != nil {
 					return "", nil
