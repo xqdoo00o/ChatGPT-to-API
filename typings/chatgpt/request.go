@@ -91,7 +91,7 @@ type FileResult struct {
 	Filesize int
 	Isimage  bool
 	Bounds   [2]int
-	// Current file max-age 1 year
+	// Current file max-age 30 days
 	Upload int64
 }
 
@@ -289,7 +289,7 @@ func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId s
 	hasher := sha1.New()
 	hasher.Write(binary)
 	hash := account + secret.TeamUserID + hex.EncodeToString(hasher.Sum(nil))
-	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+31536000 {
+	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+2592000 {
 		return fileHashPool[hash]
 	}
 	isImg := strings.HasPrefix(mimeType, "image")
@@ -319,7 +319,7 @@ func processDataUrl(data string, account string, secret *tokens.Secret, deviceId
 	hasher := sha1.New()
 	hasher.Write(binary)
 	hash := account + secret.TeamUserID + hex.EncodeToString(hasher.Sum(nil))
-	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+31536000 {
+	if fileHashPool[hash] != nil && time.Now().Unix() < fileHashPool[hash].Upload+2592000 {
 		return fileHashPool[hash]
 	}
 	startIdx := strings.Index(data, ":")
