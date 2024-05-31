@@ -777,3 +777,91 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 		ParentID:       original_response.Message.ID,
 	}
 }
+
+func HandlerTTS(response *http.Response, input string) (string, string) {
+	// Create a bufio.Reader from the response body
+	reader := bufio.NewReader(response.Body)
+
+	var original_response chatgpt_types.ChatGPTResponse
+	var convId string
+
+	for {
+		var line string
+		var err error
+		line, err = reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", ""
+		}
+		if len(line) < 6 {
+			continue
+		}
+		// Remove "data: " from the beginning of the line
+		line = line[6:]
+		// Check if line starts with [DONE]
+		if !strings.HasPrefix(line, "[DONE]") {
+			// Parse the line as JSON
+			original_response.Message.ID = ""
+			err = json.Unmarshal([]byte(line), &original_response)
+			if err != nil {
+				continue
+			}
+			if original_response.Error != nil {
+				return "", ""
+			}
+			if original_response.Message.ID == "" {
+				continue
+			}
+			if original_response.ConversationID != convId {
+				if convId == "" {
+					convId = original_response.ConversationID
+				} else {
+					continue
+				}
+			}
+			if original_response.Message.Author.Role == "assistant" && original_response.Message.Content.Parts[0].(string) == input {
+				return original_response.Message.ID, convId
+			}
+		}
+	}
+	return "", ""
+}
+
+func GetTTS(secret *tokens.Secret, deviceId string, url string, proxy string) []byte {
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+	request, err := newRequest(http.MethodGet, url, nil, secret, deviceId)
+	if err != nil {
+		return nil
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	blob, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil
+	}
+	return blob
+}
+
+func RemoveConversation(secret *tokens.Secret, deviceId string, id string, proxy string) {
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+	url := "https://chatgpt.com/backend-api/conversation/" + id
+	request, err := newRequest(http.MethodPatch, url, bytes.NewBuffer([]byte(`{"is_visible":false}`)), secret, deviceId)
+	request.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		return
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return
+	}
+	response.Body.Close()
+}

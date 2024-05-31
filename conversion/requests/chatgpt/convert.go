@@ -25,12 +25,19 @@ func ConvertAPIRequest(api_request official_types.APIRequest, account string, se
 		chatgpt_request.ConversationMode.Kind = "gizmo_interaction"
 		chatgpt_request.ConversationMode.GizmoId = "g-" + matches[1]
 	}
-	ifMultimodel := strings.HasPrefix(api_request.Model, "gpt-4")
+	ifMultimodel := secret.Token != ""
 	for _, api_message := range api_request.Messages {
 		if api_message.Role == "system" {
 			api_message.Role = "critic"
 		}
 		chatgpt_request.AddMessage(api_message.Role, api_message.Content, ifMultimodel, account, secret, deviceId, proxy)
 	}
+	return chatgpt_request
+}
+
+func ConvertTTSAPIRequest(input string) chatgpt_types.ChatGPTRequest {
+	chatgpt_request := chatgpt_types.NewChatGPTRequest()
+	chatgpt_request.HistoryAndTrainingDisabled = false
+	chatgpt_request.AddAssistantMessage(input)
 	return chatgpt_request
 }

@@ -471,3 +471,13 @@ func (c *ChatGPTRequest) AddMessage(role string, content interface{}, multimodal
 	}
 	c.Messages = append(c.Messages, msg)
 }
+
+func (c *ChatGPTRequest) AddAssistantMessage(input string) {
+	var msg = chatgpt_message{
+		ID:       uuid.New(),
+		Author:   chatgpt_author{Role: "assistant"},
+		Content:  chatgpt_content{ContentType: "text", Parts: []interface{}{input}},
+		Metadata: nil,
+	}
+	c.Messages = append(c.Messages, msg)
+}
