@@ -184,7 +184,6 @@ func nightmare(c *gin.Context) {
 	} else {
 		c.String(200, "data: [DONE]\n\n")
 	}
-	// chatgpt.UnlockSpecConn(secret.Token+secret.TeamUserID, uid)
 }
 
 var ttsFmtMap = map[string]string{

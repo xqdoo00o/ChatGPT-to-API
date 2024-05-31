@@ -3,7 +3,6 @@ package chatgpt
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -12,7 +11,6 @@ import (
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
 	"math/rand"
-	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -26,32 +24,20 @@ import (
 	http "github.com/bogdanfinn/fhttp"
 	tls_client "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
-	tls "github.com/bogdanfinn/utls"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/net/proxy"
 
 	chatgpt_response_converter "freechatgpt/conversion/response/chatgpt"
 
 	official_types "freechatgpt/typings/official"
 )
 
-type connInfo struct {
-	conn   *websocket.Conn
-	uuid   string
-	expire time.Time
-	ticker *time.Ticker
-	lock   bool
-}
-
 var (
 	client              tls_client.HttpClient
 	hostURL, _          = url.Parse("https://chatgpt.com")
 	API_REVERSE_PROXY   = os.Getenv("API_REVERSE_PROXY")
 	FILES_REVERSE_PROXY = os.Getenv("FILES_REVERSE_PROXY")
-	connPool            = map[string][]*connInfo{}
 	userAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 	startTime           = time.Now()
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
@@ -109,165 +95,6 @@ func newRequest(method string, url string, body io.Reader, secret *tokens.Secret
 		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
 	}
 	return request, nil
-}
-
-func getWSURL(secret *tokens.Secret, deviceId string, retry int) (string, error) {
-	request, err := newRequest(http.MethodPost, "https://chatgpt.com/backend-api/register-websocket", nil, secret, deviceId)
-	if err != nil {
-		return "", err
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		if retry > 3 {
-			return "", err
-		}
-		time.Sleep(time.Second) // wait 1s to get ws url
-		return getWSURL(secret, deviceId, retry+1)
-	}
-	defer response.Body.Close()
-	var WSSResp chatgpt_types.ChatGPTWSSResponse
-	err = json.NewDecoder(response.Body).Decode(&WSSResp)
-	if err != nil {
-		return "", err
-	}
-	return WSSResp.WssUrl, nil
-}
-
-type rawDialer interface {
-	Dial(network string, addr string) (c net.Conn, err error)
-}
-
-func createWSConn(addr string, connInfo *connInfo, proxyURLString string, retry int) error {
-	dialer := websocket.Dialer{
-		HandshakeTimeout: 8 * time.Second,
-		NetDialTLSContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
-			host, _, _ := net.SplitHostPort(addr)
-			config := &tls.Config{ServerName: host, OmitEmptyPsk: true}
-			var rawDial rawDialer
-			if proxyURLString != "" {
-				proxyURL, _ := url.Parse(proxyURLString)
-				rawDial, _ = proxy.FromURL(proxyURL, proxy.Direct)
-			} else {
-				rawDial = &net.Dialer{}
-			}
-			dialConn, err := rawDial.Dial(network, addr)
-			if err != nil {
-				return nil, err
-			}
-			client := tls.UClient(dialConn, config, profiles.Okhttp4Android13.GetClientHelloId(), false, true)
-			return client, nil
-		},
-	}
-	dialer.EnableCompression = true
-	dialer.Subprotocols = []string{"json.reliable.webpubsub.azure.v1"}
-	conn, _, err := dialer.Dial(addr, nil)
-	if err != nil {
-		if retry > 3 {
-			return err
-		}
-		time.Sleep(time.Second) // wait 1s to recreate ws
-		return createWSConn(addr, connInfo, proxyURLString, retry+1)
-	}
-	connInfo.conn = conn
-	connInfo.expire = time.Now().Add(time.Minute * 30)
-	ticker := time.NewTicker(time.Second * 8)
-	connInfo.ticker = ticker
-	go func(ticker *time.Ticker) {
-		defer ticker.Stop()
-		for {
-			<-ticker.C
-			if err := connInfo.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-				connInfo.conn.Close()
-				connInfo.conn = nil
-				break
-			}
-		}
-	}(ticker)
-	return nil
-}
-
-func findAvailConn(token string, uuid string) *connInfo {
-	for _, value := range connPool[token] {
-		if !value.lock {
-			value.lock = true
-			value.uuid = uuid
-			return value
-		}
-	}
-	newConnInfo := connInfo{uuid: uuid, lock: true}
-	connPool[token] = append(connPool[token], &newConnInfo)
-	return &newConnInfo
-}
-func findSpecConn(token string, uuid string) *connInfo {
-	for _, value := range connPool[token] {
-		if value.uuid == uuid {
-			return value
-		}
-	}
-	return &connInfo{}
-}
-func UnlockSpecConn(token string, uuid string) {
-	for _, value := range connPool[token] {
-		if value.uuid == uuid {
-			value.lock = false
-		}
-	}
-}
-func InitWSConn(secret *tokens.Secret, deviceId string, uuid string, proxy string) error {
-	token := secret.Token + secret.TeamUserID
-	connInfo := findAvailConn(token, uuid)
-	conn := connInfo.conn
-	isExpired := connInfo.expire.IsZero() || time.Now().After(connInfo.expire)
-	if conn == nil || isExpired {
-		if proxy != "" {
-			client.SetProxy(proxy)
-		}
-		if conn != nil {
-			connInfo.ticker.Stop()
-			conn.Close()
-			connInfo.conn = nil
-		}
-		wssURL, err := getWSURL(secret, deviceId, 0)
-		if err != nil {
-			return err
-		}
-		err = createWSConn(wssURL, connInfo, proxy, 0)
-		if err != nil {
-			return err
-		}
-		return nil
-	} else {
-		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Millisecond*100)
-		go func() {
-			defer cancelFunc()
-			for {
-				_, _, err := conn.NextReader()
-				if err != nil {
-					break
-				}
-				if ctx.Err() != nil {
-					break
-				}
-			}
-		}()
-		<-ctx.Done()
-		err := ctx.Err()
-		if err != nil {
-			switch err {
-			case context.Canceled:
-				connInfo.ticker.Stop()
-				conn.Close()
-				connInfo.conn = nil
-				connInfo.lock = false
-				return InitWSConn(secret, deviceId, uuid, proxy)
-			case context.DeadlineExceeded:
-				return nil
-			default:
-				return nil
-			}
-		}
-		return nil
-	}
 }
 
 func SetOAICookie(uuid string) {
@@ -555,91 +382,18 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 	var original_response chatgpt_types.ChatGPTResponse
 	var isRole = true
 	var imgSource []string
-	var isWSS = false
 	var convId string
 	var msgId string
-	var respId string
-	var wssUrl string
-	var connInfo *connInfo
-	var wsSeq int
-	var isWSInterrupt bool = false
-	var interruptTimer *time.Timer
 
-	if !strings.Contains(response.Header.Get("Content-Type"), "text/event-stream") {
-		isWSS = true
-		connInfo = findSpecConn(secret.Token+secret.TeamUserID, uuid)
-		if connInfo.conn == nil {
-			c.JSON(500, gin.H{"error": "No websocket connection"})
-			return "", nil
-		}
-		var wssResponse chatgpt_types.ChatGPTWSSResponse
-		json.NewDecoder(response.Body).Decode(&wssResponse)
-		wssUrl = wssResponse.WssUrl
-		respId = wssResponse.ResponseId
-		convId = wssResponse.ConversationId
-	}
 	for {
 		var line string
 		var err error
-		if isWSS {
-			var messageType int
-			var message []byte
-			if isWSInterrupt {
-				if interruptTimer == nil {
-					interruptTimer = time.NewTimer(10 * time.Second)
-				}
-				select {
-				case <-interruptTimer.C:
-					c.JSON(500, gin.H{"error": "WS interrupt & new WS timeout"})
-					return "", nil
-				default:
-					goto reader
-				}
+		line, err = reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
 			}
-		reader:
-			messageType, message, err = connInfo.conn.ReadMessage()
-			if err != nil {
-				connInfo.ticker.Stop()
-				connInfo.conn.Close()
-				connInfo.conn = nil
-				err := createWSConn(wssUrl, connInfo, proxy, 0)
-				if err != nil {
-					c.JSON(500, gin.H{"error": err.Error()})
-					return "", nil
-				}
-				isWSInterrupt = true
-				connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
-				continue
-			}
-			if messageType == websocket.TextMessage {
-				var wssMsgResponse chatgpt_types.WSSMsgResponse
-				json.Unmarshal(message, &wssMsgResponse)
-				if wssMsgResponse.Data.ResponseId != respId {
-					continue
-				}
-				wsSeq = wssMsgResponse.SequenceId
-				if wsSeq%50 == 0 {
-					connInfo.conn.WriteMessage(websocket.TextMessage, []byte("{\"type\":\"sequenceAck\",\"sequenceId\":"+strconv.Itoa(wsSeq)+"}"))
-				}
-				base64Body := wssMsgResponse.Data.Body
-				bodyByte, err := base64.StdEncoding.DecodeString(base64Body)
-				if err != nil {
-					continue
-				}
-				if isWSInterrupt {
-					isWSInterrupt = false
-					interruptTimer.Stop()
-				}
-				line = string(bodyByte)
-			}
-		} else {
-			line, err = reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return "", nil
-			}
+			return "", nil
 		}
 		if len(line) < 6 {
 			continue
@@ -758,9 +512,6 @@ func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, pro
 			if stream {
 				final_line := official_types.StopChunk(finish_reason)
 				c.Writer.WriteString("data: " + final_line.String() + "\n\n")
-			}
-			if isWSS {
-				break
 			}
 		}
 	}
