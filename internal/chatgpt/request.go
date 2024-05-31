@@ -28,6 +28,7 @@ import (
 	"github.com/bogdanfinn/tls-client/profiles"
 	tls "github.com/bogdanfinn/utls"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/sha3"
 	"golang.org/x/net/proxy"
@@ -56,6 +57,7 @@ var (
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
 	cachedHardware      = 0
+	cachedSid           = uuid.NewString()
 	cachedScripts       = []string{}
 	cachedDpl           = ""
 	cachedRequireProof  = ""
@@ -333,7 +335,7 @@ func getConfig() []interface{} {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
 	script := cachedScripts[rand.Intn(len(cachedScripts))]
 	timeNum := (float64(time.Since(startTime).Nanoseconds()) + rand.Float64()) / 1e6
-	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend", timeNum}
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "zh-CN", "zh-CN", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend", timeNum, cachedSid}
 }
 func CalcProofToken(require *ChatRequire, proxy string) string {
 	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty, proxy)
