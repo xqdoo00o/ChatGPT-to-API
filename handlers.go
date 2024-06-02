@@ -259,9 +259,7 @@ func tts(c *gin.Context) {
 
 	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, proxy_url)
 	if err != nil {
-		c.JSON(500, gin.H{
-			"error": "error sending request",
-		})
+		c.JSON(500, gin.H{"error": "error sending request"})
 		return
 	}
 	defer response.Body.Close()
@@ -281,6 +279,8 @@ func tts(c *gin.Context) {
 	data := chatgpt.GetTTS(&secret, deviceId, apiUrl, proxy_url)
 	if data != nil {
 		c.Data(200, ttsTypeMap[format], data)
+	} else {
+		c.JSON(500, gin.H{"error": "synthesize error"})
 	}
 	chatgpt.RemoveConversation(&secret, deviceId, convId, proxy_url)
 }

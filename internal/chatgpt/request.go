@@ -593,6 +593,9 @@ func GetTTS(secret *tokens.Secret, deviceId string, url string, proxy string) []
 		return nil
 	}
 	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil
+	}
 	blob, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil
