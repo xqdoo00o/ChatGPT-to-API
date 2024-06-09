@@ -11,6 +11,7 @@ import (
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
 	"math/rand"
+	"mime/multipart"
 	"net/url"
 	"os"
 	"strconv"
@@ -601,6 +602,60 @@ func GetTTS(secret *tokens.Secret, deviceId string, url string, proxy string) []
 		return nil
 	}
 	return blob
+}
+
+func generateRandomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	bytes := make([]byte, n)
+	for i := range bytes {
+		bytes[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(bytes)
+}
+
+func GetSTT(file multipart.File, header *multipart.FileHeader, lang string, secret *tokens.Secret, deviceId string, proxy string) []byte {
+	if proxy != "" {
+		client.SetProxy(proxy)
+	}
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	boundary := "----WebKitFormBoundary" + generateRandomString(16)
+	w.SetBoundary(boundary)
+	part, err := w.CreatePart(header.Header)
+	if err != nil {
+		return nil
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return nil
+	}
+	if lang != "" {
+		part, err := w.CreateFormField("language")
+		if err != nil {
+			return nil
+		}
+		part.Write([]byte(lang))
+	}
+	w.Close()
+	request, err := newRequest(http.MethodPost, "https://chatgpt.com/backend-api/transcribe", &b, secret, deviceId)
+	request.Header.Set("Content-Type", "multipart/form-data; boundary="+w.Boundary())
+	if err != nil {
+		return nil
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil
+	}
+	return body
 }
 
 func RemoveConversation(secret *tokens.Secret, deviceId string, id string, proxy string) {

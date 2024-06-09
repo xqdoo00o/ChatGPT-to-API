@@ -84,6 +84,8 @@ func main() {
 	router.POST("/v1/chat/completions", Authorization, nightmare)
 	router.OPTIONS("/v1/audio/speech", optionsHandler)
 	router.POST("/v1/audio/speech", Authorization, tts)
+	router.OPTIONS("/v1/audio/transcriptions", optionsHandler)
+	router.POST("/v1/audio/transcriptions", Authorization, stt)
 	router.OPTIONS("/v1/models", optionsHandler)
 	router.GET("/v1/models", Authorization, simulateModel)
 	endless.ListenAndServe(HOST+":"+PORT, router)
