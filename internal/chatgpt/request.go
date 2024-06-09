@@ -639,7 +639,7 @@ func GetSTT(file multipart.File, header *multipart.FileHeader, lang string, secr
 	}
 	w.Close()
 	request, err := newRequest(http.MethodPost, "https://chatgpt.com/backend-api/transcribe", &b, secret, deviceId)
-	request.Header.Set("Content-Type", "multipart/form-data; boundary="+w.Boundary())
+	request.Header.Set("Content-Type", w.FormDataContentType())
 	if err != nil {
 		return nil
 	}
