@@ -26,8 +26,6 @@ import (
 
 	http "github.com/bogdanfinn/fhttp"
 
-	tls_client "github.com/bogdanfinn/tls-client"
-	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/google/uuid"
 )
 
@@ -120,22 +118,11 @@ type RetrievalResult struct {
 }
 
 var (
-	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
-		tls_client.WithCookieJar(tls_client.NewCookieJar()),
-		tls_client.WithTimeoutSeconds(600),
-		tls_client.WithClientProfile(profiles.Okhttp4Android13),
-	}...)
-	userAgent     = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 	fileHashPool  = map[string]*FileResult{}
 	retrievalMime = map[string]bool{}
 )
 
 func init() {
-	u, _ := url.Parse("https://chatgpt.com")
-	client.GetCookieJar().SetCookies(u, []*http.Cookie{{
-		Name:  "oai-dm-tgt-c-240329",
-		Value: "2024-04-02",
-	}})
 	// from https://chatgpt.com/backend-api/models?history_and_training_disabled=false models product_features
 	retrievalMime = map[string]bool{"text/rtf": true, "application/javascript": true, "text/x-tex": true, "text/css": true, "text/xml": true, "message/rfc822": true, "text/javascript": true, "application/rtf": true, "text/x-typescript": true, "application/x-powershell": true, "application/x-sql": true, "text/x-shellscript": true, "text/x-c++": true, "text/markdown": true, "text/x-php": true, "text/x-script.python": true, "text/vbscript": true, "text/x-asm": true, "application/vnd.oasis.opendocument.text": true, "text/x-lisp": true, "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true, "application/x-rust": true, "text/x-diff": true, "text/x-python": true, "application/vnd.apple.keynote": true, "application/vnd.ms-powerpoint": true, "application/x-yaml": true, "application/msword": true, "application/x-scala": true, "text/plain": true, "text/html": true, "application/json": true, "text/calendar": true, "text/x-csharp": true, "text/x-rst": true, "text/x-java": true, "text/x-makefile": true, "application/pdf": true, "text/x-c": true, "text/x-vcard": true, "application/vnd.apple.pages": true, "application/vnd.openxmlformats-officedocument.presentationml.presentation": true, "text/x-ruby": true, "text/x-sh": true}
 	// from https://chromium.googlesource.com/chromium/src/+/HEAD/net/base/mime_util.cc
@@ -249,27 +236,6 @@ func NewChatGPTRequest() ChatGPTRequest {
 		WebsocketRequestId:         uuid.NewString(),
 		ForceSSE:                   true,
 	}
-}
-
-func newRequest(method string, url string, body io.Reader, secret *tokens.Secret, deviceId string) (*http.Request, error) {
-	request, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return &http.Request{}, err
-	}
-	request.Header.Set("User-Agent", userAgent)
-	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Oai-Device-Id", deviceId)
-	request.Header.Set("Oai-Language", "en-US")
-	if secret.Token != "" {
-		request.Header.Set("Authorization", "Bearer "+secret.Token)
-	}
-	if secret.PUID != "" {
-		request.Header.Set("Cookie", "_puid="+secret.PUID+";")
-	}
-	if secret.TeamUserID != "" {
-		request.Header.Set("Chatgpt-Account-Id", secret.TeamUserID)
-	}
-	return request, nil
 }
 
 func processUrl(urlstr string, account string, secret *tokens.Secret, deviceId string, proxy string) *FileResult {

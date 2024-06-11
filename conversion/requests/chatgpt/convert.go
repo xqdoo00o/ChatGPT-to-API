@@ -1,8 +1,8 @@
 package chatgpt
 
 import (
+	chatgpt_types "freechatgpt/internal/chatgpt"
 	"freechatgpt/internal/tokens"
-	chatgpt_types "freechatgpt/typings/chatgpt"
 	official_types "freechatgpt/typings/official"
 	"regexp"
 	"strings"

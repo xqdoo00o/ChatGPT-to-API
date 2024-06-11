@@ -7,24 +7,22 @@ require (
 	github.com/acheong08/endless v0.0.0-20230615162514-90545c7793fd
 	github.com/bogdanfinn/fhttp v0.5.28
 	github.com/bogdanfinn/tls-client v1.7.5
-	github.com/bogdanfinn/utls v1.6.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-resty/resty/v2 v2.12.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
 	github.com/tidwall/gjson v1.17.1
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240520071626-7f9e463abed0
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240611145732-92214e7f4f4c
 	github.com/xqdoo00o/funcaptcha v0.0.0-20240507071758-6c32cfc34bdc
 	golang.org/x/crypto v0.23.0
 	golang.org/x/image v0.15.0
-	golang.org/x/net v0.25.0
 	k8s.io/apimachinery v0.29.3
 )
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
+	github.com/bogdanfinn/utls v1.6.1 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
 	github.com/cloudflare/circl v1.3.8 // indirect
@@ -51,6 +49,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.7.0 // indirect
+	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/tools v0.20.0 // indirect

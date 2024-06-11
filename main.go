@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	chatgpt_types "freechatgpt/typings/chatgpt"
+	chatgpt_types "freechatgpt/internal/chatgpt"
 
 	"github.com/acheong08/endless"
 	"github.com/gin-gonic/gin"

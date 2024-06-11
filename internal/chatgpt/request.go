@@ -102,9 +102,6 @@ func SetOAICookie(uuid string) {
 	client.GetCookieJar().SetCookies(hostURL, []*http.Cookie{{
 		Name:  "oai-did",
 		Value: uuid,
-	}, {
-		Name:  "oai-dm-tgt-c-240329",
-		Value: "2024-04-02",
 	}})
 }
 
@@ -264,7 +261,7 @@ func getURLAttribution(secret *tokens.Secret, deviceId string, url string) strin
 	return attr.Attribution
 }
 
-func POSTconversation(message chatgpt_types.ChatGPTRequest, secret *tokens.Secret, deviceId string, chat_token string, arkoseToken string, proofToken string, proxy string) (*http.Response, error) {
+func POSTconversation(message ChatGPTRequest, secret *tokens.Secret, deviceId string, chat_token string, arkoseToken string, proofToken string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
