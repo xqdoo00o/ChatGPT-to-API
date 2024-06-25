@@ -110,7 +110,7 @@ func nightmare(c *gin.Context) {
 		deviceId = generateUUID(account)
 		chatgpt.SetOAICookie(deviceId)
 	}
-	chat_require := chatgpt.CheckRequire(&secret, deviceId, proxy_url)
+	chat_require, p := chatgpt.CheckRequire(&secret, deviceId, proxy_url)
 	if chat_require == nil {
 		c.JSON(500, gin.H{"error": "unable to check chat requirement"})
 		return
@@ -126,10 +126,15 @@ func nightmare(c *gin.Context) {
 			println("Error getting Arkose token: ", err)
 		}
 	}
+	var turnstileToken string
+	if chat_require.Turnstile.Required {
+		turnstileToken = chatgpt.ProcessTurnstile(chat_require.Turnstile.DX, p)
+	}
+	println(turnstileToken)
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, deviceId, proxy_url)
 
-	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, proxy_url)
+	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, turnstileToken, proxy_url)
 	if err != nil {
 		c.JSON(500, gin.H{
 			"error": "error sending request",
@@ -154,7 +159,7 @@ func nightmare(c *gin.Context) {
 		translated_request.Action = "continue"
 		translated_request.ConversationID = continue_info.ConversationID
 		translated_request.ParentMessageID = continue_info.ParentID
-		chat_require = chatgpt.CheckRequire(&secret, deviceId, proxy_url)
+		chat_require, _ = chatgpt.CheckRequire(&secret, deviceId, proxy_url)
 		if chat_require.Proof.Required {
 			proofToken = chatgpt.CalcProofToken(chat_require, proxy_url)
 		}
@@ -164,7 +169,10 @@ func nightmare(c *gin.Context) {
 				println("Error getting Arkose token: ", err)
 			}
 		}
-		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, proxy_url)
+		if chat_require.Turnstile.Required {
+			turnstileToken = chatgpt.ProcessTurnstile(chat_require.Turnstile.DX, p)
+		}
+		response, err = chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, turnstileToken, proxy_url)
 		if err != nil {
 			c.JSON(500, gin.H{
 				"error": "error sending request",
@@ -238,7 +246,7 @@ func tts(c *gin.Context) {
 	}
 	var deviceId = generateUUID(account)
 	chatgpt.SetOAICookie(deviceId)
-	chat_require := chatgpt.CheckRequire(&secret, deviceId, proxy_url)
+	chat_require, p := chatgpt.CheckRequire(&secret, deviceId, proxy_url)
 	if chat_require == nil {
 		c.JSON(500, gin.H{"error": "unable to check chat requirement"})
 		return
@@ -254,10 +262,14 @@ func tts(c *gin.Context) {
 			println("Error getting Arkose token: ", err)
 		}
 	}
+	var turnstileToken string
+	if chat_require.Turnstile.Required {
+		turnstileToken = chatgpt.ProcessTurnstile(chat_require.Turnstile.DX, p)
+	}
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertTTSAPIRequest(original_request.Input)
 
-	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, proxy_url)
+	response, err := chatgpt.POSTconversation(translated_request, &secret, deviceId, chat_require.Token, arkoseToken, proofToken, turnstileToken, proxy_url)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "error sending request"})
 		return
