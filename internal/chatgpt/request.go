@@ -299,8 +299,8 @@ func POSTconversation(message ChatGPTRequest, secret *tokens.Secret, deviceId st
 		request.Header.Set("Openai-Sentinel-Turnstile-Token", turnstileToken)
 	}
 	request.Header.Set("Origin", "https://chatgpt.com")
-	response, err := client.Do(request)
 	request.Header.Set("Referer", "https://chatgpt.com/")
+	response, err := client.Do(request)
 	if err != nil {
 		return &http.Response{}, err
 	}
