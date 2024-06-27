@@ -130,7 +130,6 @@ func nightmare(c *gin.Context) {
 	if chat_require.Turnstile.Required {
 		turnstileToken = chatgpt.ProcessTurnstile(chat_require.Turnstile.DX, p)
 	}
-	println(turnstileToken)
 	// Convert the chat request to a ChatGPT request
 	translated_request := chatgpt_request_converter.ConvertAPIRequest(original_request, account, &secret, deviceId, proxy_url)
 
