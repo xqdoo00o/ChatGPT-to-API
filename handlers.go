@@ -123,7 +123,7 @@ func nightmare(c *gin.Context) {
 	if chat_require.Arkose.Required {
 		arkoseToken, err = arkose.GetOpenAIToken(4, secret.PUID, chat_require.Arkose.DX, proxy_url)
 		if err != nil {
-			println("Error getting Arkose token: ", err)
+			println("Error getting Arkose token: ", err.Error())
 		}
 	}
 	var turnstileToken string
@@ -165,7 +165,7 @@ func nightmare(c *gin.Context) {
 		if chat_require.Arkose.Required {
 			arkoseToken, err = arkose.GetOpenAIToken(4, secret.PUID, chat_require.Arkose.DX, proxy_url)
 			if err != nil {
-				println("Error getting Arkose token: ", err)
+				println("Error getting Arkose token: ", err.Error())
 			}
 		}
 		if chat_require.Turnstile.Required {
@@ -258,7 +258,7 @@ func tts(c *gin.Context) {
 	if chat_require.Arkose.Required {
 		arkoseToken, err = arkose.GetOpenAIToken(4, secret.PUID, chat_require.Arkose.DX, proxy_url)
 		if err != nil {
-			println("Error getting Arkose token: ", err)
+			println("Error getting Arkose token: ", err.Error())
 		}
 	}
 	var turnstileToken string
