@@ -12,8 +12,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/tidwall/gjson v1.17.1
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240617101336-7c21c3eb80ad
-	github.com/xqdoo00o/funcaptcha v0.0.0-20240507071758-6c32cfc34bdc
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240701110453-a742f7a5ea18
+	github.com/xqdoo00o/funcaptcha v0.0.0-20240701110249-093b35d56d32
 	golang.org/x/crypto v0.23.0
 	golang.org/x/image v0.15.0
 	k8s.io/apimachinery v0.29.3
