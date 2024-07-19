@@ -78,6 +78,12 @@ func simulateModel(c *gin.Context) {
 				"created":  1688888888,
 				"owned_by": "chatgpt-to-api",
 			},
+			{
+				"id":       "gpt-4o-mini",
+				"object":   "model",
+				"created":  1688888888,
+				"owned_by": "chatgpt-to-api",
+			},
 		},
 	})
 }
