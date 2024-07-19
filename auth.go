@@ -180,16 +180,19 @@ func scheduleTokenPUID() {
 						}
 					}
 				tokenProcess:
-					token = ACCESS_TOKENS.GetSecret(account).Token
-					expireTime, err := getTokenExpire(token)
 					nowTime := time.Now()
-					if err != nil {
-						toExpire = interval - nowTime.Sub(stat.ModTime())
-					} else {
-						toExpire = expireTime.Sub(nowTime)
-						if toExpire > 0 {
-							toExpire = toExpire % interval
+					token = ACCESS_TOKENS.GetSecret(account).Token
+					if token != "" {
+						expireTime, err := getTokenExpire(token)
+						if err == nil {
+							toExpire = expireTime.Sub(nowTime)
+							if toExpire > 0 {
+								toExpire = toExpire % interval
+							}
 						}
+					}
+					if toExpire == 0 {
+						toExpire = interval - nowTime.Sub(stat.ModTime())
 					}
 					if toPUIDExpire > 0 {
 						toPUIDExpire = interval - nowTime.Sub(puidTime)

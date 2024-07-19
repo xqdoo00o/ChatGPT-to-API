@@ -362,7 +362,25 @@ func GetImageSource(wg *sync.WaitGroup, url string, prompt string, secret *token
 	if err != nil || file_info.Status != "success" {
 		return
 	}
+	// if strings.HasPrefix(file_info.DownloadURL, "http") {
 	imgSource[idx] = "[![image](" + file_info.DownloadURL + " \"" + prompt + "\")](" + file_info.DownloadURL + ")"
+	// } else {
+	// 	req, err := newRequest(http.MethodGet, "https://chatgpt.com"+file_info.DownloadURL, nil, secret, deviceId)
+	// 	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// 	client.SetFollowRedirect(false)
+	// 	resp, err := client.Do(req)
+	// 	if err != nil {
+	// 		return
+	// 	}
+	// 	defer resp.Body.Close()
+	// 	redirURL := resp.Header.Get("Location")
+	// 	if redirURL != "" {
+	// 		imgSource[idx] = "[![image](" + redirURL + " \"" + prompt + "\")](" + redirURL + ")"
+	// 	}
+	// }
 }
 
 func Handler(c *gin.Context, response *http.Response, secret *tokens.Secret, proxy string, deviceId string, uuid string, stream bool) (string, *ContinueInfo) {
