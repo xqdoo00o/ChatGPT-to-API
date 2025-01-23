@@ -10,6 +10,7 @@ import (
 	"freechatgpt/typings"
 	chatgpt_types "freechatgpt/typings/chatgpt"
 	"io"
+	"math"
 	"math/rand"
 	"mime/multipart"
 	"net/url"
@@ -43,10 +44,11 @@ var (
 	startTime           = time.Now()
 	timeLocation, _     = time.LoadLocation("Asia/Shanghai")
 	timeLayout          = "Mon Jan 2 2006 15:04:05"
+	cachedCore          = 0
 	cachedHardware      = 0
 	cachedSid           = uuid.NewString()
 	cachedScripts       = []string{}
-	cachedDpl           = ""
+	cachedId            = ""
 	cachedRequireProof  = ""
 )
 
@@ -54,10 +56,9 @@ func init() {
 	cores := []int{8, 12, 16, 24}
 	screens := []int{3000, 4000, 6000}
 	rand.New(rand.NewSource(time.Now().UnixNano()))
-	core := cores[rand.Intn(4)]
+	cachedCore = cores[rand.Intn(4)]
 	rand.New(rand.NewSource(time.Now().UnixNano()))
-	screen := screens[rand.Intn(3)]
-	cachedHardware = core + screen
+	cachedHardware = screens[rand.Intn(3)]
 
 	envClientProfileStr := os.Getenv("CLIENT_PROFILE")
 	var clientProfile profiles.ClientProfile
@@ -72,6 +73,7 @@ func init() {
 	}
 	client, _ = tls_client.NewHttpClient(tls_client.NewNoopLogger(), []tls_client.HttpClientOption{
 		tls_client.WithCookieJar(tls_client.NewCookieJar()),
+		tls_client.WithRandomTLSExtensionOrder(),
 		tls_client.WithTimeoutSeconds(600),
 		tls_client.WithClientProfile(clientProfile),
 	}...)
@@ -117,14 +119,13 @@ func getParseTime() string {
 	return now.Format(timeLayout) + " GMT+0800 (中国标准时间)"
 }
 func GetDpl(proxy string) {
-	if len(cachedScripts) > 0 {
+	if cachedId != "" {
 		return
 	}
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
-	cachedScripts = append(cachedScripts, "https://cdn.oaistatic.com/_next/static/chunks/9598-0150caea9526d55d.js?dpl=abad631f183104e6c8a323392d7bc30b933c5c7c")
-	cachedDpl = "dpl=abad631f183104e6c8a323392d7bc30b933c5c7c"
+	cachedId = "prod-a696433ddfe0489db6696cae8c5778c2128f26e8"
 	request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com/?oai-dm=1", nil)
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "*/*")
@@ -138,19 +139,15 @@ func GetDpl(proxy string) {
 	defer response.Body.Close()
 	doc, _ := goquery.NewDocumentFromReader(response.Body)
 	scripts := []string{}
-	inited := false
 	doc.Find("script[src]").Each(func(i int, s *goquery.Selection) {
 		src, exists := s.Attr("src")
 		if exists {
 			scripts = append(scripts, src)
-			if !inited {
-				idx := strings.Index(src, "dpl")
-				if idx >= 0 {
-					cachedDpl = src[idx:]
-					inited = true
-				}
-			}
 		}
+	})
+	doc.Find("html").Each(func(i int, s *goquery.Selection) {
+		id, _ := s.Attr("data-build")
+		cachedId = id
 	})
 	if len(scripts) != 0 {
 		cachedScripts = scripts
@@ -158,9 +155,14 @@ func GetDpl(proxy string) {
 }
 func getConfig() []interface{} {
 	rand.New(rand.NewSource(time.Now().UnixNano()))
-	script := cachedScripts[rand.Intn(len(cachedScripts))]
+	var script interface{}
+	if len(cachedScripts) > 0 {
+		script = cachedScripts[rand.Intn(len(cachedScripts))]
+	} else {
+		script = nil
+	}
 	timeNum := (float64(time.Since(startTime).Nanoseconds()) + rand.Float64()) / 1e6
-	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedDpl, "en-US", "en-US", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend", timeNum, cachedSid}
+	return []interface{}{cachedHardware, getParseTime(), int64(4294705152), 0, userAgent, script, cachedId, "en-US", "en-US", 0, "webkitGetUserMedia−function webkitGetUserMedia() { [native code] }", "location", "ontransitionend", timeNum, cachedSid, "", cachedCore, float64(startTime.UnixMicro()) / 1e3}
 }
 func CalcProofToken(require *ChatRequire, proxy string) string {
 	proof := generateAnswer(require.Proof.Seed, require.Proof.Difficulty, proxy)
@@ -169,12 +171,13 @@ func CalcProofToken(require *ChatRequire, proxy string) string {
 
 func generateAnswer(seed string, diff string, proxy string) string {
 	GetDpl(proxy)
+	timeStart := time.Now()
 	config := getConfig()
 	diffLen := len(diff)
 	hasher := sha3.New512()
 	for i := 0; i < 500000; i++ {
 		config[3] = i
-		config[9] = (i + 2) / 2
+		config[9] = math.Round((float64(time.Since(timeStart).Nanoseconds())) / 1e6)
 		json, _ := json.Marshal(config)
 		base := base64.StdEncoding.EncodeToString(json)
 		hasher.Write([]byte(seed + base))

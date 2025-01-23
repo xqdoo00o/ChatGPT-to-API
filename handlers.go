@@ -84,6 +84,18 @@ func simulateModel(c *gin.Context) {
 				"created":  1688888888,
 				"owned_by": "chatgpt-to-api",
 			},
+			{
+				"id":       "o1",
+				"object":   "model",
+				"created":  1688888888,
+				"owned_by": "chatgpt-to-api",
+			},
+			{
+				"id":       "o1-mini",
+				"object":   "model",
+				"created":  1688888888,
+				"owned_by": "chatgpt-to-api",
+			},
 		},
 	})
 }
@@ -222,10 +234,13 @@ var ttsTypeMap = map[string]string{
 
 var ttsVoiceMap = map[string]string{
 	"alloy":   "cove",
+	"ash":     "arbor",
+	"coral":   "vale",
 	"echo":    "ember",
 	"fable":   "breeze",
-	"onyx":    "cove",
-	"nova":    "juniper",
+	"onyx":    "spruce",
+	"nova":    "maple",
+	"sage":    "sol",
 	"shimmer": "juniper",
 }
 

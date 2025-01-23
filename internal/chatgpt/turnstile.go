@@ -185,6 +185,8 @@ func getFuncMap() FloatMap {
 			res := tstr + "." + nstr
 			if res == "window.document.location" {
 				processMap[e] = "https://chatgpt.com/"
+			} else if res == "window.history.length" {
+				processMap[e] = 2
 			} else {
 				processMap[e] = res
 			}
