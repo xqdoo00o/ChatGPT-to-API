@@ -12,8 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/tidwall/gjson v1.17.1
-	github.com/xqdoo00o/OpenAIAuth v0.0.0-20240701110453-a742f7a5ea18
-	github.com/xqdoo00o/funcaptcha v0.0.0-20240701110249-093b35d56d32
+	github.com/xqdoo00o/OpenAIAuth v0.0.0-20250123201147-b6e4778be9f3
 	golang.org/x/crypto v0.23.0
 	golang.org/x/image v0.15.0
 	k8s.io/apimachinery v0.29.3
@@ -37,12 +36,14 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.8 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/quic-go/quic-go v0.43.1 // indirect
+	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

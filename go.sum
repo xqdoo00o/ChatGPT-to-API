@@ -22,6 +22,7 @@ github.com/cloudwego/base64x v0.1.4 h1:jwCgWpFanWmN8xoIUHa2rtzmkd5J2plF/dnLS6Xd/
 github.com/cloudwego/base64x v0.1.4/go.mod h1:0zlkT4Wn5C6NdauXdJRhSKRlJvmclQ1hhJgA0rcu/8w=
 github.com/cloudwego/iasm v0.2.0 h1:1KNIy1I1H9hNNFEEH3DVnI4UujN+1zjpuk6gwHLTssg=
 github.com/cloudwego/iasm v0.2.0/go.mod h1:8rXZaNYT2n95jn+zTI1sDr+IgcD2GVs0nlbbQPiEFhY=
+github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -114,10 +115,8 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
-github.com/xqdoo00o/OpenAIAuth v0.0.0-20240701110453-a742f7a5ea18 h1:4Q+83OuwbY25gGtFK2fv5O+AIVmn7WI0NPH79u0HH0M=
-github.com/xqdoo00o/OpenAIAuth v0.0.0-20240701110453-a742f7a5ea18/go.mod h1:fwYwpN94kChGIoana10/wD+ytALJbG2I8JQvwMhOVKE=
-github.com/xqdoo00o/funcaptcha v0.0.0-20240701110249-093b35d56d32 h1:6QUL4meBfwSu1CRqrsYVPQxBTa0yt/9NKl8sUt14FEo=
-github.com/xqdoo00o/funcaptcha v0.0.0-20240701110249-093b35d56d32/go.mod h1:MmsYdzgYjO6NQYNS8vtecBWUFWwD4TApVzMp8iwKiR0=
+github.com/xqdoo00o/OpenAIAuth v0.0.0-20250123201147-b6e4778be9f3 h1:PCb0eIrm60RWlJMDZ/6N19D4YJkxfITua2fD+bQKZPY=
+github.com/xqdoo00o/OpenAIAuth v0.0.0-20250123201147-b6e4778be9f3/go.mod h1:+w1KZra28CIfGfGL0t7Kc+YXb2NqN27tYKxKqBSlurg=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 golang.org/x/arch v0.0.0-20210923205945-b76863e36670/go.mod h1:5om86z9Hs0C8fWVUuoMHwpExlXzs5Tkyp9hOrfG7pp8=
 golang.org/x/arch v0.7.0 h1:pskyeJh/3AmoQ8CPE95vxHLqp1G1GfGNXTmcl9NEKTc=

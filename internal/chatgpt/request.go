@@ -191,12 +191,8 @@ func generateAnswer(seed string, diff string, proxy string) string {
 }
 
 type ChatRequire struct {
-	Token  string    `json:"token"`
-	Proof  ProofWork `json:"proofofwork,omitempty"`
-	Arkose struct {
-		Required bool   `json:"required"`
-		DX       string `json:"dx,omitempty"`
-	} `json:"arkose"`
+	Token     string    `json:"token"`
+	Proof     ProofWork `json:"proofofwork,omitempty"`
 	Turnstile struct {
 		Required bool   `json:"required"`
 		DX       string `json:"dx,omitempty"`
@@ -265,7 +261,7 @@ func getURLAttribution(secret *tokens.Secret, deviceId string, url string) strin
 	return attr.Attribution
 }
 
-func POSTconversation(message ChatGPTRequest, secret *tokens.Secret, deviceId string, chat_token string, arkoseToken string, proofToken string, turnstileToken string, proxy string) (*http.Response, error) {
+func POSTconversation(message ChatGPTRequest, secret *tokens.Secret, deviceId string, chat_token string, proofToken string, turnstileToken string, proxy string) (*http.Response, error) {
 	if proxy != "" {
 		client.SetProxy(proxy)
 	}
@@ -289,9 +285,6 @@ func POSTconversation(message ChatGPTRequest, secret *tokens.Secret, deviceId st
 		return &http.Response{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	if arkoseToken != "" {
-		request.Header.Set("Openai-Sentinel-Arkose-Token", arkoseToken)
-	}
 	if chat_token != "" {
 		request.Header.Set("Openai-Sentinel-Chat-Requirements-Token", chat_token)
 	}
