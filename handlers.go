@@ -220,13 +220,13 @@ var ttsTypeMap = map[string]string{
 
 var ttsVoiceMap = map[string]string{
 	"alloy":   "cove",
-	"ash":     "arbor",
+	"ash":     "fathom",
 	"coral":   "vale",
 	"echo":    "ember",
 	"fable":   "breeze",
-	"onyx":    "spruce",
+	"onyx":    "orbit",
 	"nova":    "maple",
-	"sage":    "sol",
+	"sage":    "glimmer",
 	"shimmer": "juniper",
 }
 
