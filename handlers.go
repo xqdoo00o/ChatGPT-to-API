@@ -244,10 +244,6 @@ func tts(c *gin.Context) {
 	}
 
 	account, secret := getSecret()
-	if account == "" || secret.PUID == "" {
-		c.JSON(500, gin.H{"error": "Plus user only"})
-		return
-	}
 	var proxy_url string
 	if len(proxies) == 0 {
 		proxy_url = ""
